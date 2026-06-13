@@ -1,0 +1,536 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+import type { Member, FamilyUser, Tag, Family } from '@/types'
+
+type SettingsTab = 'family' | 'members' | 'users' | 'tags' | 'account'
+
+const AVATAR_COLORS = [
+  '#6366f1', '#8b5cf6', '#ec4899', '#f59e0b',
+  '#10b981', '#3b82f6', '#ef4444', '#14b8a6',
+]
+
+export default function SettingsPage() {
+  const router = useRouter()
+  const supabase = createClient()
+  const [tab, setTab] = useState<SettingsTab>('family')
+  const [family, setFamily] = useState<Family | null>(null)
+  const [familyId, setFamilyId] = useState('')
+  const [members, setMembers] = useState<Member[]>([])
+  const [users, setUsers] = useState<FamilyUser[]>([])
+  const [tags, setTags] = useState<Tag[]>([])
+  const [categories, setCategories] = useState<any[]>([])
+  const [saving, setSaving] = useState(false)
+
+  // New category form
+  const [newCatMemberId, setNewCatMemberId] = useState('')
+  const [newCatName, setNewCatName] = useState('')
+  const [newCatColor, setNewCatColor] = useState('#6366f1')
+
+  // Edit member
+  const [editMemberId, setEditMemberId] = useState<string | null>(null)
+  const [editMemberName, setEditMemberName] = useState('')
+  const [editMemberColor, setEditMemberColor] = useState('')
+
+  // Edit category
+  const [editCatId, setEditCatId] = useState<string | null>(null)
+  const [editCatName, setEditCatName] = useState('')
+  const [editCatColor, setEditCatColor] = useState('')
+
+  // Family form
+  const [familyName, setFamilyName] = useState('')
+  const [firstDay, setFirstDay] = useState<'saturday' | 'sunday' | 'monday'>('sunday')
+
+  // New member form
+  const [newMemberName, setNewMemberName] = useState('')
+  const [newMemberColor, setNewMemberColor] = useState(AVATAR_COLORS[0])
+
+  // New tag form
+  const [newTagName, setNewTagName] = useState('')
+  const [newTagColor, setNewTagColor] = useState('#6366f1')
+
+  // Invite
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState<'editor' | 'user' | 'viewer'>('user')
+  const [inviteLink, setInviteLink] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: fu } = await supabase
+        .from('family_users').select('*, families(*)').eq('user_id', user.id).limit(1).single()
+      if (!fu) return
+
+      const fid = fu.family_id
+      setFamilyId(fid)
+      setFamily(fu.families as any)
+      setFamilyName(fu.families?.name ?? '')
+      setFirstDay(fu.families?.first_day_of_week ?? 'sunday')
+
+      const [{ data: membersData }, { data: usersData }, { data: tagsData }] = await Promise.all([
+        supabase.from('members').select('*').eq('family_id', fid),
+        supabase.from('family_users').select('*, user_profiles(display_name, avatar_url)').eq('family_id', fid),
+        supabase.from('tags').select('*').eq('family_id', fid),
+      ])
+      setMembers(membersData ?? [])
+      setUsers((usersData ?? []).map((u: any) => ({
+        ...u,
+        displayName: u.user_profiles?.display_name ?? u.user_id,
+        email: '',
+        joinedAt: u.joined_at,
+      })))
+      setTags(tagsData ?? [])
+
+      if ((membersData ?? []).length > 0) {
+        const memberIds = membersData!.map((m: any) => m.id)
+        const { data: catsData } = await supabase
+          .from('categories').select('*').in('member_id', memberIds)
+        setCategories(catsData ?? [])
+        if (!newCatMemberId && memberIds.length > 0) setNewCatMemberId(memberIds[0])
+      }
+    }
+    load()
+  }, [])
+
+  async function saveFamily() {
+    setSaving(true)
+    await supabase.from('families').update({ name: familyName, first_day_of_week: firstDay }).eq('id', familyId)
+    setSaving(false)
+  }
+
+  async function addCategory() {
+    if (!newCatName.trim() || !newCatMemberId) return
+    const { data: id } = await supabase.rpc('add_category', {
+      p_member_id: newCatMemberId,
+      p_name: newCatName.trim(),
+      p_color: newCatColor,
+    })
+    if (id) setCategories((prev) => [...prev, { id, member_id: newCatMemberId, name: newCatName.trim(), color: newCatColor, sort_order: 0 }])
+    setNewCatName('')
+  }
+
+  async function deleteCategory(id: string) {
+    await supabase.from('categories').delete().eq('id', id)
+    setCategories((prev) => prev.filter((c) => c.id !== id))
+  }
+
+  async function saveMember() {
+    if (!editMemberId || !editMemberName.trim()) return
+    await supabase.rpc('update_member', { p_member_id: editMemberId, p_name: editMemberName.trim(), p_color: editMemberColor })
+    setMembers((prev) => prev.map((m: any) => m.id === editMemberId ? { ...m, name: editMemberName, avatar_color: editMemberColor } : m))
+    setEditMemberId(null)
+  }
+
+  async function saveCat() {
+    if (!editCatId || !editCatName.trim()) return
+    await supabase.rpc('update_category', { p_category_id: editCatId, p_name: editCatName.trim(), p_color: editCatColor })
+    setCategories((prev) => prev.map((c) => c.id === editCatId ? { ...c, name: editCatName, color: editCatColor } : c))
+    setEditCatId(null)
+  }
+
+  async function addMember() {
+    if (!newMemberName.trim()) return
+    const { data } = await supabase.from('members')
+      .insert({ family_id: familyId, name: newMemberName.trim(), avatar_color: newMemberColor })
+      .select().single()
+    if (data) setMembers((prev) => [...prev, data])
+    setNewMemberName('')
+  }
+
+  async function archiveMember(id: string) {
+    await supabase.from('members').update({ is_archived: true }).eq('id', id)
+    setMembers((prev) => prev.filter((m) => m.id !== id))
+  }
+
+  async function addTag() {
+    if (!newTagName.trim()) return
+    const { data } = await supabase.from('tags')
+      .insert({ family_id: familyId, name: newTagName.trim(), color: newTagColor })
+      .select().single()
+    if (data) setTags((prev) => [...prev, data])
+    setNewTagName('')
+  }
+
+  async function deleteTag(id: string) {
+    await supabase.from('tags').delete().eq('id', id)
+    setTags((prev) => prev.filter((t) => t.id !== id))
+  }
+
+  function copyInviteLink() {
+    try {
+      navigator.clipboard.writeText(inviteLink)
+    } catch {
+      const el = document.createElement('textarea')
+      el.value = inviteLink
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
+    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function handleInvite() {
+    if (!inviteEmail.trim()) return
+    setSaving(true)
+    const { data: token, error } = await supabase.rpc('create_invitation', {
+      p_email: inviteEmail.trim(),
+      p_role: inviteRole,
+    })
+    if (!error && token) {
+      setInviteLink(`${window.location.origin}/invite/${token}`)
+      setInviteEmail('')
+    }
+    setSaving(false)
+  }
+
+  async function handleSignOut() {
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
+  const tabs: { value: SettingsTab; label: string }[] = [
+    { value: 'family', label: 'משפחה' },
+    { value: 'members', label: 'חברים' },
+    { value: 'users', label: 'משתמשים' },
+    { value: 'tags', label: 'תגיות' },
+    { value: 'account', label: 'חשבון' },
+  ]
+
+  return (
+    <div className="flex flex-col min-h-full">
+      {/* Header */}
+      <div className="sticky top-0 bg-white z-10 px-4 pt-4 pb-0 border-b border-gray-100">
+        <h1 className="text-xl font-bold text-gray-900 mb-3">הגדרות</h1>
+        <div className="flex gap-1 overflow-x-auto scrollbar-hide pb-0">
+          {tabs.map(({ value, label }) => (
+            <button
+              key={value}
+              onClick={() => setTab(value)}
+              className={`shrink-0 px-4 py-2.5 text-sm font-medium border-b-2 transition-all ${
+                tab === value ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-5 space-y-5">
+
+        {/* Family */}
+        {tab === 'family' && (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">שם המשפחה</label>
+              <input
+                type="text"
+                value={familyName}
+                onChange={(e) => setFamilyName(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">יום ראשון בשבוע</label>
+              <div className="flex gap-2">
+                {[
+                  { value: 'sunday', label: 'ראשון' },
+                  { value: 'monday', label: 'שני' },
+                  { value: 'saturday', label: 'שבת' },
+                ].map(({ value, label }) => (
+                  <button key={value} onClick={() => setFirstDay(value as any)}
+                    className={`flex-1 rounded-xl py-2.5 text-sm font-medium border transition-all ${
+                      firstDay === value ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200 text-gray-600'
+                    }`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button onClick={saveFamily} disabled={saving}
+              className="w-full rounded-xl bg-indigo-600 text-white py-3 font-semibold disabled:opacity-60">
+              {saving ? 'שומר...' : 'שמור'}
+            </button>
+
+            <div className="pt-2">
+              <button onClick={() => router.push('/archive')}
+                className="w-full rounded-xl border border-gray-200 py-3 text-sm font-medium text-gray-700 flex items-center justify-center gap-2">
+                <span>ארכיון</span>
+                <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 7l-7 7 7 7" />
+                </svg>
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Members */}
+        {tab === 'members' && (
+          <>
+            <div className="space-y-2">
+              {members.map((m: any) => (
+                <div key={m.id} className="rounded-xl border border-gray-100 bg-white p-3">
+                  {editMemberId === m.id ? (
+                    <div className="space-y-2">
+                      <input
+                        value={editMemberName}
+                        onChange={(e) => setEditMemberName(e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500">צבע:</span>
+                        <div className="flex gap-1.5 flex-wrap">
+                          {AVATAR_COLORS.map((c) => (
+                            <button key={c} onClick={() => setEditMemberColor(c)}
+                              className={`h-6 w-6 rounded-full transition-all ${editMemberColor === c ? 'ring-2 ring-offset-1 ring-indigo-600 scale-110' : ''}`}
+                              style={{ backgroundColor: c }} />
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={saveMember} className="flex-1 rounded-lg bg-indigo-600 text-white py-1.5 text-xs font-semibold">שמור</button>
+                        <button onClick={() => setEditMemberId(null)} className="flex-1 rounded-lg border border-gray-200 text-gray-600 py-1.5 text-xs">ביטול</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <span className="h-9 w-9 rounded-full flex items-center justify-center text-white font-bold text-base shrink-0"
+                        style={{ backgroundColor: m.avatar_color ?? m.avatarColor }}>
+                        {m.name[0]}
+                      </span>
+                      <span className="flex-1 font-medium text-gray-800">{m.name}</span>
+                      <button onClick={() => { setEditMemberId(m.id); setEditMemberName(m.name); setEditMemberColor(m.avatar_color ?? m.avatarColor) }}
+                        className="text-xs text-indigo-500 hover:text-indigo-700 transition-colors">ערוך</button>
+                      <button onClick={() => archiveMember(m.id)}
+                        className="text-xs text-gray-400 hover:text-red-500 transition-colors">ארכיון</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Categories */}
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-gray-700">קטגוריות</h3>
+              {members.length === 0 ? (
+                <p className="text-xs text-gray-400">הוסיפו חברים תחילה</p>
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    {categories.map((cat) => {
+                      const member = members.find((m: any) => m.id === cat.member_id)
+                      return (
+                        <div key={cat.id} className="rounded-xl bg-white border border-gray-100 px-3 py-2">
+                          {editCatId === cat.id ? (
+                            <div className="space-y-2">
+                              <div className="flex gap-2">
+                                <input value={editCatName} onChange={(e) => setEditCatName(e.target.value)}
+                                  className="flex-1 rounded-lg border border-gray-200 px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+                                <input type="color" value={editCatColor} onChange={(e) => setEditCatColor(e.target.value)}
+                                  className="h-8 w-10 rounded cursor-pointer border border-gray-200" />
+                              </div>
+                              <div className="flex gap-2">
+                                <button onClick={saveCat} className="flex-1 rounded-lg bg-indigo-600 text-white py-1 text-xs font-semibold">שמור</button>
+                                <button onClick={() => setEditCatId(null)} className="flex-1 rounded-lg border border-gray-200 text-gray-600 py-1 text-xs">ביטול</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
+                              <span className="flex-1 text-sm text-gray-800">{cat.name}</span>
+                              <span className="text-xs text-gray-400">{(member as any)?.name}</span>
+                              <button onClick={() => { setEditCatId(cat.id); setEditCatName(cat.name); setEditCatColor(cat.color) }}
+                                className="text-xs text-indigo-500 hover:text-indigo-700 transition-colors">ערוך</button>
+                              <button onClick={() => deleteCategory(cat.id)} className="text-gray-300 hover:text-red-400 transition-colors">
+                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="space-y-2 pt-1">
+                    <select
+                      value={newCatMemberId}
+                      onChange={(e) => setNewCatMemberId(e.target.value)}
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      {members.map((m: any) => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newCatName}
+                        onChange={(e) => setNewCatName(e.target.value)}
+                        placeholder="שם קטגוריה"
+                        className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <input type="color" value={newCatColor} onChange={(e) => setNewCatColor(e.target.value)}
+                        className="h-9 w-12 rounded-lg cursor-pointer border border-gray-200" />
+                    </div>
+                    <button onClick={addCategory} disabled={!newCatName.trim()}
+                      className="w-full rounded-xl bg-indigo-600 text-white py-2 text-sm font-semibold disabled:opacity-50">
+                      הוסף קטגוריה
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-dashed border-gray-200 p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-gray-700">הוסף חבר</h3>
+              <input
+                type="text"
+                value={newMemberName}
+                onChange={(e) => setNewMemberName(e.target.value)}
+                placeholder="שם החבר"
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <div className="flex gap-2">
+                {AVATAR_COLORS.map((c) => (
+                  <button key={c} onClick={() => setNewMemberColor(c)}
+                    className={`h-7 w-7 rounded-full transition-all ${newMemberColor === c ? 'ring-2 ring-offset-1 ring-indigo-600 scale-110' : ''}`}
+                    style={{ backgroundColor: c }} />
+                ))}
+              </div>
+              <button onClick={addMember} disabled={!newMemberName.trim()}
+                className="w-full rounded-xl bg-indigo-600 text-white py-2.5 text-sm font-semibold disabled:opacity-50">
+                הוסף
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Users */}
+        {tab === 'users' && (
+          <>
+            <div className="space-y-2">
+              {users.map((u) => (
+                <div key={u.id} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-3">
+                  <div className="h-9 w-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm">
+                    {u.displayName?.[0]?.toUpperCase() ?? '?'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{u.displayName}</p>
+                    <p className="text-xs text-gray-400">{roleLabel(u.role)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-2xl border border-dashed border-gray-200 p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-gray-700">הזמן משתמש</h3>
+              <input
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="כתובת אימייל"
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <div className="flex gap-2">
+                {[
+                  { value: 'editor', label: 'עורך' },
+                  { value: 'user', label: 'משתמש' },
+                  { value: 'viewer', label: 'צופה' },
+                ].map(({ value, label }) => (
+                  <button key={value} onClick={() => setInviteRole(value as any)}
+                    className={`flex-1 rounded-xl py-2 text-xs font-medium border transition-all ${
+                      inviteRole === value ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200 text-gray-600'
+                    }`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <button onClick={handleInvite} disabled={!inviteEmail.trim() || saving}
+                className="w-full rounded-xl bg-indigo-600 text-white py-2.5 text-sm font-semibold disabled:opacity-50">
+                {saving ? 'יוצר קישור...' : 'צור קישור הזמנה'}
+              </button>
+
+              {inviteLink && (
+                <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-3 space-y-2">
+                  <p className="text-xs text-indigo-700 font-medium">שלחי את הקישור הזה:</p>
+                  <div className="flex gap-2">
+                    <input readOnly value={inviteLink}
+                      className="flex-1 rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs text-gray-700 outline-none" />
+                    <button onClick={copyInviteLink}
+                      className="shrink-0 rounded-lg bg-indigo-600 text-white px-3 py-1.5 text-xs font-medium transition-colors">
+                      {copied ? '✓ הועתק' : 'העתק'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Tags */}
+        {tab === 'tags' && (
+          <>
+            <div className="flex flex-wrap gap-2">
+              {tags.map((tag) => (
+                <div key={tag.id} className="flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1.5">
+                  {tag.color && (
+                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: tag.color }} />
+                  )}
+                  <span className="text-sm text-gray-700">{tag.name}</span>
+                  <button onClick={() => deleteTag(tag.id)}
+                    className="text-gray-300 hover:text-red-400 transition-colors mr-0.5">
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-2xl border border-dashed border-gray-200 p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-gray-700">הוסף תגית</h3>
+              <input
+                type="text"
+                value={newTagName}
+                onChange={(e) => setNewTagName(e.target.value)}
+                placeholder="שם התגית"
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-gray-600">צבע:</label>
+                <input type="color" value={newTagColor} onChange={(e) => setNewTagColor(e.target.value)}
+                  className="h-8 w-14 rounded cursor-pointer border border-gray-200" />
+              </div>
+              <button onClick={addTag} disabled={!newTagName.trim()}
+                className="w-full rounded-xl bg-indigo-600 text-white py-2.5 text-sm font-semibold disabled:opacity-50">
+                הוסף
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Account */}
+        {tab === 'account' && (
+          <div className="space-y-4">
+            <button onClick={handleSignOut}
+              className="w-full rounded-xl border border-red-200 text-red-600 py-3 text-sm font-semibold">
+              התנתקות
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function roleLabel(role: string) {
+  return { admin: 'מנהל', editor: 'עורך', user: 'משתמש', viewer: 'צופה' }[role] ?? role
+}

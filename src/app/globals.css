@@ -1,26 +1,53 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --font-geist: var(--font-geist);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* RTL-first utilities */
+html[dir="rtl"] {
+  text-align: right;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Hide scrollbars but keep functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Safe area for bottom nav on iOS */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Prevent text size adjust on orientation change */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Prose for markdown content */
+.prose h1, .prose h2, .prose h3 {
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+.prose ul {
+  list-style-type: disc;
+  padding-right: 1.5rem;
+}
+.prose ol {
+  list-style-type: decimal;
+  padding-right: 1.5rem;
+}
+.prose p {
+  margin-bottom: 0.5rem;
+  line-height: 1.6;
+}
+.prose strong {
+  font-weight: 700;
+}
+.prose em {
+  font-style: italic;
 }
