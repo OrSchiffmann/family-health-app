@@ -69,7 +69,7 @@ export default function FilterBar({ filters, categories, onChange }: Props) {
 
       {/* Categories */}
       {categories.length > 0 && (
-        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+        <div className="flex flex-wrap gap-1.5">
           {categories.map((cat) => (
             <button
               key={cat.id}
