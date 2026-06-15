@@ -317,74 +317,105 @@ export default function SettingsPage() {
             </div>
 
             {/* Categories */}
-            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3">
+            <div className="space-y-3">
               <h3 className="text-sm font-semibold text-gray-700">קטגוריות</h3>
               {members.length === 0 ? (
                 <p className="text-xs text-gray-400">הוסיפו חברים תחילה</p>
               ) : (
                 <>
-                  <div className="space-y-1.5">
-                    {categories.map((cat) => {
-                      const member = members.find((m: any) => m.id === cat.member_id)
-                      return (
-                        <div key={cat.id} className="rounded-xl bg-white border border-gray-100 px-3 py-2">
-                          {editCatId === cat.id ? (
-                            <div className="space-y-2">
-                              <div className="flex gap-2">
-                                <input value={editCatName} onChange={(e) => setEditCatName(e.target.value)}
-                                  className="flex-1 rounded-lg border border-gray-200 px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
-                                <input type="color" value={editCatColor} onChange={(e) => setEditCatColor(e.target.value)}
-                                  className="h-8 w-10 rounded cursor-pointer border border-gray-200" />
-                              </div>
-                              <div className="flex gap-2">
-                                <button onClick={saveCat} className="flex-1 rounded-lg bg-indigo-600 text-white py-1 text-xs font-semibold">שמור</button>
-                                <button onClick={() => setEditCatId(null)} className="flex-1 rounded-lg border border-gray-200 text-gray-600 py-1 text-xs">ביטול</button>
-                              </div>
+                  {/* Grouped by member */}
+                  {members.map((m: any) => {
+                    const memberCats = categories.filter((c) => c.member_id === m.id)
+                    return (
+                      <div key={m.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-3 space-y-2">
+                        {/* Member header */}
+                        <div className="flex items-center gap-2">
+                          <span className="h-6 w-6 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                            style={{ backgroundColor: m.avatar_color ?? m.avatarColor }}>
+                            {m.name[0]}
+                          </span>
+                          <span className="text-sm font-medium text-gray-700">{m.name}</span>
+                        </div>
+
+                        {/* Category chips */}
+                        <div className="flex flex-wrap gap-2">
+                          {memberCats.map((cat) => (
+                            <div key={cat.id}>
+                              {editCatId === cat.id ? (
+                                <div className="rounded-xl border border-indigo-200 bg-white p-2 space-y-1.5 w-52">
+                                  <div className="flex gap-1.5">
+                                    <input value={editCatName} onChange={(e) => setEditCatName(e.target.value)}
+                                      className="flex-1 rounded-lg border border-gray-200 px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-indigo-500" />
+                                    <input type="color" value={editCatColor} onChange={(e) => setEditCatColor(e.target.value)}
+                                      className="h-7 w-8 rounded cursor-pointer border border-gray-200" />
+                                  </div>
+                                  <div className="flex gap-1.5">
+                                    <button onClick={saveCat} className="flex-1 rounded-lg bg-indigo-600 text-white py-1 text-xs font-semibold">שמור</button>
+                                    <button onClick={() => setEditCatId(null)} className="flex-1 rounded-lg border border-gray-200 text-gray-600 py-1 text-xs">ביטול</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="group flex items-center gap-1.5 rounded-full border border-gray-200 bg-white pl-2 pr-3 py-1.5">
+                                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
+                                  <span className="text-xs font-medium text-gray-700">{cat.name}</span>
+                                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity mr-1">
+                                    <button onClick={() => { setEditCatId(cat.id); setEditCatName(cat.name); setEditCatColor(cat.color) }}
+                                      className="text-indigo-400 hover:text-indigo-600 transition-colors">
+                                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                      </svg>
+                                    </button>
+                                    <button onClick={() => deleteCategory(cat.id)} className="text-gray-300 hover:text-red-400 transition-colors">
+                                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
-                              <span className="flex-1 text-sm text-gray-800">{cat.name}</span>
-                              <span className="text-xs text-gray-400">{(member as any)?.name}</span>
-                              <button onClick={() => { setEditCatId(cat.id); setEditCatName(cat.name); setEditCatColor(cat.color) }}
-                                className="text-xs text-indigo-500 hover:text-indigo-700 transition-colors">ערוך</button>
-                              <button onClick={() => deleteCategory(cat.id)} className="text-gray-300 hover:text-red-400 transition-colors">
-                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          ))}
+
+                          {/* Inline add for this member */}
+                          {newCatMemberId === m.id ? (
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="text"
+                                value={newCatName}
+                                onChange={(e) => setNewCatName(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && addCategory()}
+                                placeholder="שם קטגוריה"
+                                autoFocus
+                                className="w-28 rounded-full border border-indigo-300 bg-white px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                              />
+                              <input type="color" value={newCatColor} onChange={(e) => setNewCatColor(e.target.value)}
+                                className="h-7 w-7 rounded-full cursor-pointer border border-gray-200" />
+                              <button onClick={addCategory} disabled={!newCatName.trim()}
+                                className="rounded-full bg-indigo-600 text-white px-3 py-1.5 text-xs font-semibold disabled:opacity-50">
+                                הוסף
+                              </button>
+                              <button onClick={() => { setNewCatMemberId(''); setNewCatName('') }}
+                                className="text-gray-400 hover:text-gray-600 transition-colors">
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                               </button>
                             </div>
+                          ) : (
+                            <button
+                              onClick={() => { setNewCatMemberId(m.id); setNewCatName('') }}
+                              className="flex items-center gap-1 rounded-full border border-dashed border-gray-300 px-3 py-1.5 text-xs text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-colors"
+                            >
+                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                              </svg>
+                              הוסף
+                            </button>
                           )}
                         </div>
-                      )
-                    })}
-                  </div>
-                  <div className="space-y-2 pt-1">
-                    <select
-                      value={newCatMemberId}
-                      onChange={(e) => setNewCatMemberId(e.target.value)}
-                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                      {members.map((m: any) => (
-                        <option key={m.id} value={m.id}>{m.name}</option>
-                      ))}
-                    </select>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={newCatName}
-                        onChange={(e) => setNewCatName(e.target.value)}
-                        placeholder="שם קטגוריה"
-                        className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                      <input type="color" value={newCatColor} onChange={(e) => setNewCatColor(e.target.value)}
-                        className="h-9 w-12 rounded-lg cursor-pointer border border-gray-200" />
-                    </div>
-                    <button onClick={addCategory} disabled={!newCatName.trim()}
-                      className="w-full rounded-xl bg-indigo-600 text-white py-2 text-sm font-semibold disabled:opacity-50">
-                      הוסף קטגוריה
-                    </button>
-                  </div>
+                      </div>
+                    )
+                  })}
                 </>
               )}
             </div>
