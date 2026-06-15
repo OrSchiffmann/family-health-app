@@ -189,7 +189,7 @@ export default function StatisticsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="h-8 w-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
+        <div className="h-8 w-8 rounded-full border-2 border-teal-600 border-t-transparent animate-spin" />
       </div>
     )
   }
@@ -255,7 +255,7 @@ export default function StatisticsPage() {
                         <span className="text-gray-500">{done}/{t}</span>
                       </div>
                       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-indigo-500 rounded-full"
+                        <div className="h-full bg-teal-500 rounded-full"
                           style={{ width: `${t > 0 ? (done / t) * 100 : 0}%` }} />
                       </div>
                     </div>
@@ -274,7 +274,7 @@ export default function StatisticsPage() {
               <select
                 value={selectedTask}
                 onChange={(e) => setSelectedTask(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm bg-white outline-none focus:ring-2 focus:ring-teal-500"
               >
                 <option value="">-- בחר משימה --</option>
                 {tasks.map((t) => (
@@ -292,7 +292,7 @@ export default function StatisticsPage() {
               ].map(({ value, label }) => (
                 <button key={value} onClick={() => setRange(value as Range)}
                   className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-all ${
-                    range === value ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200 text-gray-600'
+                    range === value ? 'bg-teal-600 border-teal-600 text-white' : 'border-gray-200 text-gray-600'
                   }`}>
                   {label}
                 </button>
@@ -370,7 +370,7 @@ function StatCard({ label, value, color }: { label: string; value: string; color
   const colors = {
     green: 'bg-green-50 text-green-700',
     amber: 'bg-amber-50 text-amber-700',
-    indigo: 'bg-indigo-50 text-indigo-700',
+    indigo: 'bg-teal-50 text-teal-700',
     purple: 'bg-purple-50 text-purple-700',
   }
   return (

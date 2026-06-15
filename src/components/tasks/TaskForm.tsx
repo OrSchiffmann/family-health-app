@@ -218,7 +218,7 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
         </div>
         <div className="flex gap-1.5">
           {STEPS.map((_, i) => (
-            <div key={i} className={`h-1 flex-1 rounded-full transition-all ${i <= step ? 'bg-indigo-600' : 'bg-gray-200'}`} />
+            <div key={i} className={`h-1 flex-1 rounded-full transition-all ${i <= step ? 'bg-teal-600' : 'bg-gray-200'}`} />
           ))}
         </div>
       </div>
@@ -235,7 +235,7 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
                 value={form.title}
                 onChange={(e) => update('title', e.target.value)}
                 placeholder="שם המשימה"
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
 
@@ -271,7 +271,7 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
                     onClick={() => { update('categoryId', cat.id); update('subcategoryId', '') }}
                     className={`w-full flex items-center gap-2.5 rounded-xl px-4 py-3 border transition-all text-right ${
                       form.categoryId === cat.id
-                        ? 'border-indigo-600 bg-indigo-50'
+                        ? 'border-teal-600 bg-teal-50'
                         : 'border-gray-200 bg-white'
                     }`}
                   >
@@ -292,7 +292,7 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
                       onClick={() => update('subcategoryId', form.subcategoryId === sub.id ? '' : sub.id)}
                       className={`rounded-full px-3 py-1.5 text-xs font-medium border transition-all ${
                         form.subcategoryId === sub.id
-                          ? 'bg-indigo-600 border-indigo-600 text-white'
+                          ? 'bg-teal-600 border-teal-600 text-white'
                           : 'border-gray-200 text-gray-600'
                       }`}
                     >
@@ -315,7 +315,7 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
                 onChange={(e) => update('description', e.target.value)}
                 rows={6}
                 placeholder="תאר את המשימה... תומך **עיצוב** _markdown_"
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm font-mono resize-none outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm font-mono resize-none outline-none focus:ring-2 focus:ring-teal-500"
               />
               <p className="text-xs text-gray-400 mt-1">תומך בעיצוב Markdown: **מודגש**, _נטוי_, רשימות</p>
             </div>
@@ -356,7 +356,7 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
                   onChange={(e) => setNewUrl(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && addAttachment()}
                   placeholder="הדבק לינק — תמונה, YouTube או אתר"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500"
                   dir="ltr"
                 />
                 <input
@@ -364,7 +364,7 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   placeholder="כותרת (אופציונלי)"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500"
                 />
                 <button
                   onClick={addAttachment}
@@ -392,7 +392,7 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
                     key={value}
                     onClick={() => update('taskType', value as TaskType)}
                     className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition-all ${
-                      form.taskType === value ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-500'
+                      form.taskType === value ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-500'
                     }`}
                   >
                     {label}
@@ -410,7 +410,7 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
                 min={1}
                 value={form.taskType === 'duration' ? form.targetMinutes : form.targetCount}
                 onChange={(e) => update(form.taskType === 'duration' ? 'targetMinutes' : 'targetCount', e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
 
@@ -427,7 +427,7 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
                     onClick={() => update('per', value as CadencePer)}
                     className={`flex-1 rounded-xl py-2.5 text-sm font-medium border transition-all ${
                       form.per === value
-                        ? 'bg-indigo-600 border-indigo-600 text-white'
+                        ? 'bg-teal-600 border-teal-600 text-white'
                         : 'border-gray-200 text-gray-600'
                     }`}
                   >
@@ -447,7 +447,7 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
               type="date"
               value={form.endDate}
               onChange={(e) => update('endDate', e.target.value)}
-              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-teal-500"
             />
             <p className="text-xs text-gray-400 mt-2">לאחר תאריך זה, המשימה תועבר לארכיון אוטומטית</p>
           </div>
@@ -467,7 +467,7 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
                     onClick={() => toggleTag(tag.id)}
                     className={`rounded-full px-3 py-1.5 text-xs font-medium border transition-all ${
                       form.selectedTags.includes(tag.id)
-                        ? 'bg-indigo-600 border-indigo-600 text-white'
+                        ? 'bg-teal-600 border-teal-600 text-white'
                         : 'border-gray-200 text-gray-600'
                     }`}
                   >
@@ -486,7 +486,7 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
           <button
             onClick={() => setStep(step + 1)}
             disabled={!canProceed()}
-            className="w-full rounded-2xl bg-indigo-600 text-white py-4 font-bold text-base disabled:opacity-50 active:scale-95 transition-all"
+            className="w-full rounded-2xl bg-teal-600 text-white py-4 font-bold text-base disabled:opacity-50 active:scale-95 transition-all"
           >
             הבא
           </button>

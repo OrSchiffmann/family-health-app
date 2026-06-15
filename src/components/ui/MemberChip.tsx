@@ -1,4 +1,3 @@
-import { clsx } from 'clsx'
 import type { Member } from '@/types'
 
 interface Props {
@@ -13,21 +12,27 @@ export default function MemberChip({ member, selected, onClick, size = 'md' }: P
   return (
     <button
       onClick={onClick}
-      className={clsx(
-        'flex items-center gap-1.5 rounded-full border font-medium transition-all shrink-0',
-        size === 'md' ? 'px-3 py-1.5 text-sm' : 'px-2.5 py-1 text-xs',
-        selected
-          ? 'border-indigo-600 bg-indigo-600 text-white'
-          : 'border-gray-200 bg-white text-gray-700'
-      )}
+      className="flex items-center gap-1.5 rounded-full font-medium transition-all shrink-0"
+      style={{
+        padding: size === 'md' ? '6px 14px 6px 8px' : '4px 10px 4px 6px',
+        fontSize: size === 'md' ? 14 : 12,
+        background: selected ? 'linear-gradient(135deg, #0AB5B5, #06B6D4)' : 'white',
+        color: selected ? 'white' : '#374151',
+        boxShadow: selected ? '0 2px 8px rgba(10,181,181,0.4)' : '0 1px 3px rgba(0,0,0,0.08)',
+      }}
     >
       <span
-        className={clsx('rounded-full shrink-0 overflow-hidden flex items-center justify-center', size === 'md' ? 'h-5 w-5' : 'h-4 w-4')}
-        style={avatarUrl ? undefined : { backgroundColor: member.avatarColor }}
+        className="rounded-full shrink-0 overflow-hidden flex items-center justify-center text-white font-bold"
+        style={{
+          width: size === 'md' ? 22 : 18,
+          height: size === 'md' ? 22 : 18,
+          fontSize: size === 'md' ? 11 : 9,
+          ...(avatarUrl ? {} : { backgroundColor: member.avatarColor }),
+        }}
       >
         {avatarUrl
           ? <img src={avatarUrl} alt={member.name} className="h-full w-full object-cover" />
-          : null}
+          : member.name[0]}
       </span>
       {member.name}
     </button>

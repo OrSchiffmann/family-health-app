@@ -185,7 +185,7 @@ export default function ExecutionModal({ taskId, memberId, members, onClose, onS
               type="checkbox"
               checked={completed}
               onChange={(e) => setCompleted(e.target.checked)}
-              className="h-5 w-5 rounded border-gray-300 text-indigo-600 accent-indigo-600"
+              className="h-5 w-5 rounded border-gray-300 text-teal-600 accent-teal-600"
             />
             <span className="font-medium text-gray-800">בוצע</span>
           </label>
@@ -201,7 +201,7 @@ export default function ExecutionModal({ taskId, memberId, members, onClose, onS
                   key={i}
                   onClick={() => setTimerMode(i === 0)}
                   className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${
-                    timerMode === (i === 0) ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-500'
+                    timerMode === (i === 0) ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-500'
                   }`}
                 >
                   {label}
@@ -219,7 +219,7 @@ export default function ExecutionModal({ taskId, memberId, members, onClose, onS
                 )}
                 <div className="flex gap-2 justify-center">
                   {!timerRunning ? (
-                    <button onClick={startTimer} className="rounded-full bg-indigo-600 text-white px-6 py-2.5 text-sm font-semibold">
+                    <button onClick={startTimer} className="rounded-full bg-teal-600 text-white px-6 py-2.5 text-sm font-semibold">
                       {timerSeconds === 0 ? 'התחל' : 'המשך'}
                     </button>
                   ) : (
@@ -243,7 +243,7 @@ export default function ExecutionModal({ taskId, memberId, members, onClose, onS
                   value={manualMinutes}
                   onChange={(e) => setManualMinutes(e.target.value)}
                   placeholder="הכנס מספר דקות"
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
             )}
@@ -257,7 +257,7 @@ export default function ExecutionModal({ taskId, memberId, members, onClose, onS
             type="datetime-local"
             value={executionTime}
             onChange={(e) => setExecutionTime(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-teal-500"
           />
         </div>
 
@@ -269,7 +269,7 @@ export default function ExecutionModal({ taskId, memberId, members, onClose, onS
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
             placeholder="הערות לביצוע..."
-            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm resize-none outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm resize-none outline-none focus:ring-2 focus:ring-teal-500"
           />
         </div>
 
@@ -288,7 +288,7 @@ export default function ExecutionModal({ taskId, memberId, members, onClose, onS
                   }
                   className={`rounded-full px-3 py-1 text-xs font-medium border transition-all ${
                     selectedTags.includes(tag.id)
-                      ? 'bg-indigo-600 border-indigo-600 text-white'
+                      ? 'bg-teal-600 border-teal-600 text-white'
                       : 'border-gray-200 text-gray-600'
                   }`}
                 >
@@ -305,7 +305,7 @@ export default function ExecutionModal({ taskId, memberId, members, onClose, onS
         <button
           onClick={handleSubmit}
           disabled={saving || (!selectedMemberId)}
-          className="w-full rounded-xl bg-indigo-600 text-white py-3.5 font-semibold text-base disabled:opacity-60 active:scale-95 transition-all"
+          className="w-full rounded-xl bg-teal-600 text-white py-3.5 font-semibold text-base disabled:opacity-60 active:scale-95 transition-all"
         >
           {saving ? 'שומר...' : 'שמור ביצוע'}
         </button>

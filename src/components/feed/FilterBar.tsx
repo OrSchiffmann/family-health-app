@@ -42,12 +42,11 @@ export default function FilterBar({ filters, categories, onChange }: Props) {
           <button
             key={tw.value}
             onClick={() => onChange({ ...filters, timeWindow: tw.value })}
-            className={clsx(
-              'shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all',
-              filters.timeWindow === tw.value
-                ? 'bg-indigo-600 text-white'
-                : 'bg-gray-100 text-gray-600'
-            )}
+            className="shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all"
+            style={filters.timeWindow === tw.value
+              ? { background: 'linear-gradient(135deg, #0AB5B5, #06B6D4)', color: 'white' }
+              : { backgroundColor: 'white', color: '#6B7280' }
+            }
           >
             {tw.label}
           </button>
@@ -60,7 +59,7 @@ export default function FilterBar({ filters, categories, onChange }: Props) {
           onClick={() => onChange({ ...filters, showArchived: !filters.showArchived })}
           className={clsx(
             'shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all',
-            filters.showArchived ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600'
+            filters.showArchived ? 'bg-gray-700 text-white' : 'bg-white text-gray-500'
           )}
         >
           ארכיון

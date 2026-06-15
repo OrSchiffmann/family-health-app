@@ -1,9 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { clsx } from 'clsx'
 import type { TaskWithDetails, Member, CadenceProgress } from '@/types'
-import CategoryBadge from '@/components/ui/CategoryBadge'
 import ProgressBar from '@/components/ui/ProgressBar'
 
 interface Props {
@@ -15,42 +13,43 @@ interface Props {
 }
 
 export default function TaskCard({ task, members, progress, showMembers = false, onLog }: Props) {
+  const done = progress.achieved >= progress.target && progress.target > 0
+
   return (
-    <div
-      className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
-      style={{ borderRightWidth: 4, borderRightColor: task.category.color }}
-    >
-      <Link href={`/tasks/${task.id}`} className="block p-4">
+    <div className="bg-white rounded-3xl shadow-sm overflow-hidden" style={{ borderTopWidth: 3, borderTopColor: task.category?.color ?? '#0AB5B5' }}>
+      <Link href={`/tasks/${task.id}`} className="block px-5 pt-4 pb-3">
         {/* Header */}
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-gray-900 text-base leading-snug truncate">
-              {task.title}
-            </h3>
-            {task.subcategory && (
-              <p className="text-xs text-gray-400 mt-0.5">{task.subcategory.name}</p>
-            )}
-          </div>
-          <CategoryBadge category={task.category} />
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <h3 className="font-bold text-gray-900 text-base leading-snug flex-1">{task.title}</h3>
+          {done && (
+            <span className="shrink-0 text-xs font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#CCFBF1', color: '#0D9488' }}>
+              ✓ הושלם
+            </span>
+          )}
         </div>
 
-        {/* Members avatars (shown in "All" mode) */}
+        {task.subcategory && (
+          <p className="text-xs mb-3" style={{ color: task.category?.color ?? '#9CA3AF' }}>{task.category?.name} · {task.subcategory.name}</p>
+        )}
+        {!task.subcategory && task.category && (
+          <p className="text-xs mb-3" style={{ color: task.category.color }}>{task.category.name}</p>
+        )}
+
+        {/* Member avatars */}
         {showMembers && members.length > 0 && (
-          <div className="flex items-center gap-1 mb-3">
+          <div className="flex items-center gap-1.5 mb-3">
             {members.map((m) => (
-              <span
-                key={m.id}
-                title={m.name}
-                className="h-5 w-5 rounded-full text-white text-xs flex items-center justify-center font-medium"
-                style={{ backgroundColor: m.avatarColor }}
-              >
-                {m.name[0]}
+              <span key={m.id} title={m.name}
+                className="h-6 w-6 rounded-full flex items-center justify-center text-white text-xs font-bold overflow-hidden shrink-0"
+                style={m.avatarUrl ? undefined : { backgroundColor: m.avatarColor }}>
+                {m.avatarUrl
+                  ? <img src={m.avatarUrl} alt={m.name} className="h-full w-full object-cover" />
+                  : m.name[0]}
               </span>
             ))}
           </div>
         )}
 
-        {/* Progress */}
         <ProgressBar
           achieved={progress.achieved}
           target={progress.target}
@@ -58,7 +57,6 @@ export default function TaskCard({ task, members, progress, showMembers = false,
           per={progress.per}
         />
 
-        {/* End date */}
         {task.endDate && (
           <p className="text-xs text-gray-400 mt-2">
             מסתיים: {new Date(task.endDate).toLocaleDateString('he-IL')}
@@ -67,17 +65,16 @@ export default function TaskCard({ task, members, progress, showMembers = false,
       </Link>
 
       {/* Log button */}
-      <div className="px-4 pb-4">
+      <div className="px-5 pb-5">
         <button
           onClick={(e) => { e.preventDefault(); onLog(task.id) }}
-          className={clsx(
-            'w-full rounded-xl py-2.5 text-sm font-semibold transition-all active:scale-95',
-            progress.achieved >= progress.target && progress.target > 0
-              ? 'bg-green-50 text-green-700 border border-green-200'
-              : 'bg-indigo-600 text-white shadow-sm shadow-indigo-200'
-          )}
+          className="w-full rounded-2xl py-3 text-sm font-bold transition-all active:scale-95"
+          style={done
+            ? { backgroundColor: '#F0FDF4', color: '#15803D', border: '1.5px solid #BBF7D0' }
+            : { background: 'linear-gradient(135deg, #0AB5B5, #06B6D4)', color: 'white', boxShadow: '0 4px 14px rgba(10,181,181,0.35)' }
+          }
         >
-          {progress.achieved >= progress.target && progress.target > 0 ? '✓ הושלם — רשום עוד' : 'רשום'}
+          {done ? '✓ הושלם — רשום עוד' : '+ רשום ביצוע'}
         </button>
       </div>
     </div>

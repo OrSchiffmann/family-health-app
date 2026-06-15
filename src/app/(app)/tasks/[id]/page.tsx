@@ -148,7 +148,7 @@ export default function TaskDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="h-8 w-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
+        <div className="h-8 w-8 rounded-full border-2 border-teal-600 border-t-transparent animate-spin" />
       </div>
     )
   }
@@ -173,7 +173,7 @@ export default function TaskDetailPage() {
               <p className="text-xs text-gray-400">{task.subcategory.name}</p>
             )}
           </div>
-          <Link href={`/tasks/${id}/edit`} className="text-indigo-600 text-sm font-medium">ערוך</Link>
+          <Link href={`/tasks/${id}/edit`} className="text-teal-600 text-sm font-medium">ערוך</Link>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -223,7 +223,7 @@ export default function TaskDetailPage() {
               if (att.type === 'link') {
                 return (
                   <a key={att.id} href={att.url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-2 rounded-xl border border-gray-200 p-3 text-sm text-indigo-600 font-medium">
+                    className="flex items-center gap-2 rounded-xl border border-gray-200 p-3 text-sm text-teal-600 font-medium">
                     <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                     </svg>
@@ -253,7 +253,7 @@ export default function TaskDetailPage() {
           <section>
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">יעד</h2>
-              <Link href={`/tasks/${id}/cadence`} className="text-xs text-indigo-600 font-medium">עדכן יעד</Link>
+              <Link href={`/tasks/${id}/cadence`} className="text-xs text-teal-600 font-medium">עדכן יעד</Link>
             </div>
             <div className="rounded-xl bg-gray-50 p-3">
               <p className="text-sm text-gray-700">
@@ -280,7 +280,7 @@ export default function TaskDetailPage() {
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input type="checkbox" checked={editCompleted}
                             onChange={(e) => setEditCompleted(e.target.checked)}
-                            className="h-4 w-4 accent-indigo-600" />
+                            className="h-4 w-4 accent-teal-600" />
                           <span className="text-sm text-gray-700">בוצע</span>
                         </label>
                       ) : (
@@ -288,17 +288,17 @@ export default function TaskDetailPage() {
                           <label className="text-xs text-gray-500 mb-1 block">דקות</label>
                           <input type="number" value={editMinutes}
                             onChange={(e) => setEditMinutes(e.target.value)}
-                            className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
+                            className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-teal-500" />
                         </div>
                       )}
                       <div>
                         <label className="text-xs text-gray-500 mb-1 block">הערות</label>
                         <textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)}
-                          rows={2} className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm resize-none outline-none focus:ring-2 focus:ring-indigo-500" />
+                          rows={2} className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm resize-none outline-none focus:ring-2 focus:ring-teal-500" />
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => saveLog(log.id)}
-                          className="flex-1 rounded-lg bg-indigo-600 text-white py-1.5 text-xs font-semibold">שמור</button>
+                          className="flex-1 rounded-lg bg-teal-600 text-white py-1.5 text-xs font-semibold">שמור</button>
                         <button onClick={() => setEditLogId(null)}
                           className="flex-1 rounded-lg border border-gray-200 text-gray-600 py-1.5 text-xs">ביטול</button>
                       </div>
@@ -327,7 +327,7 @@ export default function TaskDetailPage() {
                       </div>
                       <div className="flex gap-2 shrink-0">
                         <button onClick={() => startEdit(log)}
-                          className="text-xs text-indigo-500 hover:text-indigo-700">ערוך</button>
+                          className="text-xs text-teal-500 hover:text-teal-700">ערוך</button>
                         <button onClick={() => deleteLog(log.id)}
                           className="text-xs text-gray-400 hover:text-red-500">מחק</button>
                       </div>
@@ -343,7 +343,7 @@ export default function TaskDetailPage() {
       {/* Floating log button */}
       <div className="fixed bottom-20 inset-x-0 max-w-md mx-auto px-4">
         <button onClick={() => setShowLog(true)}
-          className="w-full rounded-2xl bg-indigo-600 text-white py-4 font-bold text-base shadow-lg shadow-indigo-200 active:scale-95 transition-all">
+          className="w-full rounded-2xl bg-teal-600 text-white py-4 font-bold text-base shadow-lg shadow-teal-200 active:scale-95 transition-all">
           + רשום ביצוע
         </button>
       </div>

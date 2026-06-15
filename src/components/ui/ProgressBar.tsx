@@ -1,5 +1,3 @@
-import { clsx } from 'clsx'
-
 interface Props {
   achieved: number
   target: number
@@ -14,8 +12,15 @@ export default function ProgressBar({ achieved, target, taskType, per }: Props) 
   const state: 'none' | 'partial' | 'done' =
     pct === 0 ? 'none' : pct >= 1 ? 'done' : 'partial'
 
-  const barColor = state === 'done' ? 'bg-green-500' : state === 'partial' ? 'bg-amber-400' : 'bg-gray-200'
-  const textColor = state === 'done' ? 'text-green-600' : state === 'partial' ? 'text-amber-600' : 'text-gray-400'
+  const fill =
+    state === 'done'
+      ? 'linear-gradient(90deg, #0AB5B5, #06B6D4)'
+      : state === 'partial'
+      ? 'linear-gradient(90deg, #F59E0B, #FCD34D)'
+      : 'transparent'
+
+  const textColor =
+    state === 'done' ? '#0D9488' : state === 'partial' ? '#D97706' : '#9CA3AF'
 
   const label =
     taskType === 'duration'
@@ -23,14 +28,14 @@ export default function ProgressBar({ achieved, target, taskType, per }: Props) 
       : `${achieved}/${target} ${perLabel[per]}`
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+    <div className="flex items-center gap-3">
+      <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
         <div
-          className={clsx('h-full rounded-full transition-all', barColor)}
-          style={{ width: `${pct * 100}%` }}
+          className="h-full rounded-full transition-all duration-700 ease-out"
+          style={{ width: `${pct * 100}%`, background: fill }}
         />
       </div>
-      <span className={clsx('text-xs font-medium tabular-nums shrink-0', textColor)}>
+      <span className="text-xs font-semibold tabular-nums shrink-0" style={{ color: textColor }}>
         {label}
       </span>
     </div>

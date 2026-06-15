@@ -188,9 +188,9 @@ export default function FeedPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="sticky top-0 bg-white z-10 px-4 pt-4 pb-3 space-y-3 border-b border-gray-100">
+      <div className="sticky top-0 bg-[#F0FAFA] z-10 px-4 pt-5 pb-3 space-y-3">
         {/* Member chips */}
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
           <MemberChip
             member={{ id: 'all', name: 'הכל', avatarColor: '#6366f1' }}
             selected={selectedMember === null}
@@ -210,13 +210,13 @@ export default function FeedPage() {
 
         {refreshing && (
           <div className="flex items-center justify-center py-1">
-            <div className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
+            <div className="h-4 w-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#0AB5B5', borderTopColor: 'transparent' }} />
           </div>
         )}
       </div>
 
       {/* Task list */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {filteredTasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">

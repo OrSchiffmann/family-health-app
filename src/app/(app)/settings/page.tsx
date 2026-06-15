@@ -253,7 +253,7 @@ export default function SettingsPage() {
               key={value}
               onClick={() => setTab(value)}
               className={`shrink-0 px-4 py-2.5 text-sm font-medium border-b-2 transition-all ${
-                tab === value ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500'
+                tab === value ? 'border-teal-600 text-teal-600' : 'border-transparent text-gray-500'
               }`}
             >
               {label}
@@ -273,7 +273,7 @@ export default function SettingsPage() {
                 type="text"
                 value={familyName}
                 onChange={(e) => setFamilyName(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
             <div>
@@ -286,7 +286,7 @@ export default function SettingsPage() {
                 ].map(({ value, label }) => (
                   <button key={value} onClick={() => setFirstDay(value as any)}
                     className={`flex-1 rounded-xl py-2.5 text-sm font-medium border transition-all ${
-                      firstDay === value ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200 text-gray-600'
+                      firstDay === value ? 'bg-teal-600 border-teal-600 text-white' : 'border-gray-200 text-gray-600'
                     }`}>
                     {label}
                   </button>
@@ -294,7 +294,7 @@ export default function SettingsPage() {
               </div>
             </div>
             <button onClick={saveFamily} disabled={saving}
-              className="w-full rounded-xl bg-indigo-600 text-white py-3 font-semibold disabled:opacity-60">
+              className="w-full rounded-xl bg-teal-600 text-white py-3 font-semibold disabled:opacity-60">
               {saving ? 'שומר...' : 'שמור'}
             </button>
 
@@ -321,20 +321,20 @@ export default function SettingsPage() {
                       <input
                         value={editMemberName}
                         onChange={(e) => setEditMemberName(e.target.value)}
-                        className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-teal-500"
                       />
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-500">צבע:</span>
                         <div className="flex gap-1.5 flex-wrap">
                           {AVATAR_COLORS.map((c) => (
                             <button key={c} onClick={() => setEditMemberColor(c)}
-                              className={`h-6 w-6 rounded-full transition-all ${editMemberColor === c ? 'ring-2 ring-offset-1 ring-indigo-600 scale-110' : ''}`}
+                              className={`h-6 w-6 rounded-full transition-all ${editMemberColor === c ? 'ring-2 ring-offset-1 ring-teal-600 scale-110' : ''}`}
                               style={{ backgroundColor: c }} />
                           ))}
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <button onClick={saveMember} className="flex-1 rounded-lg bg-indigo-600 text-white py-1.5 text-xs font-semibold">שמור</button>
+                        <button onClick={saveMember} className="flex-1 rounded-lg bg-teal-600 text-white py-1.5 text-xs font-semibold">שמור</button>
                         <button onClick={() => setEditMemberId(null)} className="flex-1 rounded-lg border border-gray-200 text-gray-600 py-1.5 text-xs">ביטול</button>
                       </div>
                     </div>
@@ -358,7 +358,7 @@ export default function SettingsPage() {
                       </label>
                       <span className="flex-1 font-medium text-gray-800">{m.name}</span>
                       <button onClick={() => { setEditMemberId(m.id); setEditMemberName(m.name); setEditMemberColor(m.avatarColor) }}
-                        className="text-xs text-indigo-500 hover:text-indigo-700 transition-colors">ערוך</button>
+                        className="text-xs text-teal-500 hover:text-teal-700 transition-colors">ערוך</button>
                       <button onClick={() => archiveMember(m.id)}
                         className="text-xs text-gray-400 hover:text-red-500 transition-colors">ארכיון</button>
                     </div>
@@ -393,15 +393,15 @@ export default function SettingsPage() {
                           {memberCats.map((cat) => (
                             <div key={cat.id}>
                               {editCatId === cat.id ? (
-                                <div className="rounded-xl border border-indigo-200 bg-white p-2 space-y-1.5 w-52">
+                                <div className="rounded-xl border border-teal-200 bg-white p-2 space-y-1.5 w-52">
                                   <div className="flex gap-1.5">
                                     <input value={editCatName} onChange={(e) => setEditCatName(e.target.value)}
-                                      className="flex-1 rounded-lg border border-gray-200 px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-indigo-500" />
+                                      className="flex-1 rounded-lg border border-gray-200 px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-teal-500" />
                                     <input type="color" value={editCatColor} onChange={(e) => setEditCatColor(e.target.value)}
                                       className="h-7 w-8 rounded cursor-pointer border border-gray-200" />
                                   </div>
                                   <div className="flex gap-1.5">
-                                    <button onClick={saveCat} className="flex-1 rounded-lg bg-indigo-600 text-white py-1 text-xs font-semibold">שמור</button>
+                                    <button onClick={saveCat} className="flex-1 rounded-lg bg-teal-600 text-white py-1 text-xs font-semibold">שמור</button>
                                     <button onClick={() => setEditCatId(null)} className="flex-1 rounded-lg border border-gray-200 text-gray-600 py-1 text-xs">ביטול</button>
                                   </div>
                                 </div>
@@ -411,7 +411,7 @@ export default function SettingsPage() {
                                   <span className="text-xs font-medium text-gray-700">{cat.name}</span>
                                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity mr-1">
                                     <button onClick={() => { setEditCatId(cat.id); setEditCatName(cat.name); setEditCatColor(cat.color) }}
-                                      className="text-indigo-400 hover:text-indigo-600 transition-colors">
+                                      className="text-teal-400 hover:text-teal-600 transition-colors">
                                       <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                       </svg>
@@ -437,12 +437,12 @@ export default function SettingsPage() {
                                 onKeyDown={(e) => e.key === 'Enter' && addCategory()}
                                 placeholder="שם קטגוריה"
                                 autoFocus
-                                className="w-28 rounded-full border border-indigo-300 bg-white px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                                className="w-28 rounded-full border border-teal-300 bg-white px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-teal-500"
                               />
                               <input type="color" value={newCatColor} onChange={(e) => setNewCatColor(e.target.value)}
                                 className="h-7 w-7 rounded-full cursor-pointer border border-gray-200" />
                               <button onClick={addCategory} disabled={!newCatName.trim()}
-                                className="rounded-full bg-indigo-600 text-white px-3 py-1.5 text-xs font-semibold disabled:opacity-50">
+                                className="rounded-full bg-teal-600 text-white px-3 py-1.5 text-xs font-semibold disabled:opacity-50">
                                 הוסף
                               </button>
                               <button onClick={() => { setNewCatMemberId(''); setNewCatName('') }}
@@ -455,7 +455,7 @@ export default function SettingsPage() {
                           ) : (
                             <button
                               onClick={() => { setNewCatMemberId(m.id); setNewCatName('') }}
-                              className="flex items-center gap-1 rounded-full border border-dashed border-gray-300 px-3 py-1.5 text-xs text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-colors"
+                              className="flex items-center gap-1 rounded-full border border-dashed border-gray-300 px-3 py-1.5 text-xs text-gray-400 hover:border-teal-400 hover:text-teal-500 transition-colors"
                             >
                               <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -478,17 +478,17 @@ export default function SettingsPage() {
                 value={newMemberName}
                 onChange={(e) => setNewMemberName(e.target.value)}
                 placeholder="שם החבר"
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500"
               />
               <div className="flex gap-2">
                 {AVATAR_COLORS.map((c) => (
                   <button key={c} onClick={() => setNewMemberColor(c)}
-                    className={`h-7 w-7 rounded-full transition-all ${newMemberColor === c ? 'ring-2 ring-offset-1 ring-indigo-600 scale-110' : ''}`}
+                    className={`h-7 w-7 rounded-full transition-all ${newMemberColor === c ? 'ring-2 ring-offset-1 ring-teal-600 scale-110' : ''}`}
                     style={{ backgroundColor: c }} />
                 ))}
               </div>
               <button onClick={addMember} disabled={!newMemberName.trim()}
-                className="w-full rounded-xl bg-indigo-600 text-white py-2.5 text-sm font-semibold disabled:opacity-50">
+                className="w-full rounded-xl bg-teal-600 text-white py-2.5 text-sm font-semibold disabled:opacity-50">
                 הוסף
               </button>
             </div>
@@ -501,7 +501,7 @@ export default function SettingsPage() {
             <div className="space-y-2">
               {users.map((u) => (
                 <div key={u.id} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-3">
-                  <div className="h-9 w-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm">
+                  <div className="h-9 w-9 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold text-sm">
                     {u.displayName?.[0]?.toUpperCase() ?? '?'}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -519,7 +519,7 @@ export default function SettingsPage() {
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
                 placeholder="כתובת אימייל"
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500"
               />
               <div className="flex gap-2">
                 {[
@@ -529,25 +529,25 @@ export default function SettingsPage() {
                 ].map(({ value, label }) => (
                   <button key={value} onClick={() => setInviteRole(value as any)}
                     className={`flex-1 rounded-xl py-2 text-xs font-medium border transition-all ${
-                      inviteRole === value ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200 text-gray-600'
+                      inviteRole === value ? 'bg-teal-600 border-teal-600 text-white' : 'border-gray-200 text-gray-600'
                     }`}>
                     {label}
                   </button>
                 ))}
               </div>
               <button onClick={handleInvite} disabled={!inviteEmail.trim() || saving}
-                className="w-full rounded-xl bg-indigo-600 text-white py-2.5 text-sm font-semibold disabled:opacity-50">
+                className="w-full rounded-xl bg-teal-600 text-white py-2.5 text-sm font-semibold disabled:opacity-50">
                 {saving ? 'יוצר קישור...' : 'צור קישור הזמנה'}
               </button>
 
               {inviteLink && (
-                <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-3 space-y-2">
-                  <p className="text-xs text-indigo-700 font-medium">שלחי את הקישור הזה:</p>
+                <div className="rounded-xl bg-teal-50 border border-teal-100 p-3 space-y-2">
+                  <p className="text-xs text-teal-700 font-medium">שלחי את הקישור הזה:</p>
                   <div className="flex gap-2">
                     <input readOnly value={inviteLink}
-                      className="flex-1 rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs text-gray-700 outline-none" />
+                      className="flex-1 rounded-lg border border-teal-200 bg-white px-3 py-1.5 text-xs text-gray-700 outline-none" />
                     <button onClick={copyInviteLink}
-                      className="shrink-0 rounded-lg bg-indigo-600 text-white px-3 py-1.5 text-xs font-medium transition-colors">
+                      className="shrink-0 rounded-lg bg-teal-600 text-white px-3 py-1.5 text-xs font-medium transition-colors">
                       {copied ? '✓ הועתק' : 'העתק'}
                     </button>
                   </div>
@@ -584,7 +584,7 @@ export default function SettingsPage() {
                 value={newTagName}
                 onChange={(e) => setNewTagName(e.target.value)}
                 placeholder="שם התגית"
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500"
               />
               <div className="flex items-center gap-3">
                 <label className="text-sm text-gray-600">צבע:</label>
@@ -592,7 +592,7 @@ export default function SettingsPage() {
                   className="h-8 w-14 rounded cursor-pointer border border-gray-200" />
               </div>
               <button onClick={addTag} disabled={!newTagName.trim()}
-                className="w-full rounded-xl bg-indigo-600 text-white py-2.5 text-sm font-semibold disabled:opacity-50">
+                className="w-full rounded-xl bg-teal-600 text-white py-2.5 text-sm font-semibold disabled:opacity-50">
                 הוסף
               </button>
             </div>
@@ -606,12 +606,12 @@ export default function SettingsPage() {
             {currentUser && (
               <div className="flex flex-col items-center gap-4 py-2">
                 <label className="relative cursor-pointer group">
-                  <div className="h-24 w-24 rounded-full overflow-hidden bg-indigo-100 flex items-center justify-center ring-4 ring-white shadow-md">
+                  <div className="h-24 w-24 rounded-full overflow-hidden bg-teal-100 flex items-center justify-center ring-4 ring-white shadow-md">
                     {currentUser.avatarUrl ? (
                       <img src={currentUser.avatarUrl} alt={currentUser.displayName}
                         className="h-full w-full object-cover" />
                     ) : (
-                      <span className="text-3xl font-bold text-indigo-400">
+                      <span className="text-3xl font-bold text-teal-400">
                         {currentUser.displayName?.[0]?.toUpperCase() ?? '?'}
                       </span>
                     )}
