@@ -1,15 +1,13 @@
 import { startOfDay, startOfWeek, startOfMonth, endOfDay, endOfWeek, endOfMonth } from 'date-fns'
-import type { TaskWithDetails, CadenceProgress, LogEntry, CadenceVersion } from '@/types'
-import type { TimeWindow } from '@/components/feed/FilterBar'
+import type { TaskWithDetails, CadenceProgress, LogEntry, CadenceVersion, CadencePer } from '@/types'
 
-export function getWindowBounds(window: TimeWindow, firstDayOfWeek: 0 | 1 | 6 = 0): [Date, Date] {
+export function getWindowBounds(per: CadencePer, firstDayOfWeek: 0 | 1 | 6 = 0): [Date, Date] {
   const now = new Date()
   const weekOptions = { weekStartsOn: firstDayOfWeek as 0 | 1 | 6 }
-  switch (window) {
-    case 'today': return [startOfDay(now), endOfDay(now)]
+  switch (per) {
+    case 'day': return [startOfDay(now), endOfDay(now)]
     case 'week': return [startOfWeek(now, weekOptions), endOfWeek(now, weekOptions)]
     case 'month': return [startOfMonth(now), endOfMonth(now)]
-    case 'all': return [new Date(0), new Date(9999, 11, 31)]
   }
 }
 
@@ -28,8 +26,8 @@ export function getActiveCadence(versions: CadenceVersion[], date: Date): Cadenc
 export function computeProgress(
   task: TaskWithDetails,
   memberId: string | null,
-  timeWindow: TimeWindow,
-  logs?: LogEntry[]
+  logs?: LogEntry[],
+  firstDayOfWeek: 0 | 1 | 6 = 0
 ): CadenceProgress {
   const cadence = getActiveCadence(task.cadenceVersions, new Date())
   if (!cadence) {
@@ -43,9 +41,10 @@ export function computeProgress(
     return { target, achieved: 0, per: cadence.per, taskType: task.taskType }
   }
 
-  const [start, end] = getWindowBounds(timeWindow)
+  const [start, end] = getWindowBounds(cadence.per, firstDayOfWeek)
   const relevantLogs = logs.filter((l) => {
-    const d = new Date(l.loggedAt)
+    // Use executionTime for retroactive entries, fall back to loggedAt
+    const d = new Date(l.executionTime ?? l.loggedAt)
     if (d < start || d > end) return false
     if (memberId && l.memberId !== memberId) return false
     return true

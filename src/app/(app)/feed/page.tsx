@@ -2,13 +2,18 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { subDays, startOfMonth } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
 import TaskCard from '@/components/feed/TaskCard'
 import FilterBar, { type FeedFilters } from '@/components/feed/FilterBar'
 import MemberChip from '@/components/ui/MemberChip'
 import ExecutionModal from '@/components/tasks/ExecutionModal'
-import type { TaskWithDetails, Member, Category, CadenceProgress, LogEntry } from '@/types'
+import type { TaskWithDetails, Member, Category, CadenceProgress, LogEntry, FirstDayOfWeek } from '@/types'
 import { computeProgress } from '@/lib/progress'
+
+function toDateFnsDay(d: FirstDayOfWeek): 0 | 1 | 6 {
+  return d === 'sunday' ? 0 : d === 'monday' ? 1 : 6
+}
 
 export default function FeedPage() {
   const router = useRouter()
@@ -20,6 +25,8 @@ export default function FeedPage() {
   const [logTaskId, setLogTaskId] = useState<string | null>(null)
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [firstDayOfWeek, setFirstDayOfWeek] = useState<0 | 1 | 6>(0)
 
   const [filters, setFilters] = useState<FeedFilters>({
     timeWindow: 'week',
@@ -28,7 +35,9 @@ export default function FeedPage() {
     showArchived: false,
   })
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true)
+
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
@@ -42,7 +51,8 @@ export default function FeedPage() {
     if (!fu) { router.push('/onboarding'); return }
     const familyId = fu.family_id
 
-    const [{ data: membersData }, { data: tasksData }] = await Promise.all([
+    const [{ data: familyData }, { data: membersData }, { data: tasksData }] = await Promise.all([
+      supabase.from('families').select('first_day_of_week').eq('id', familyId).single(),
       supabase.from('members').select('*').eq('family_id', familyId).eq('is_archived', false),
       supabase
         .from('tasks')
@@ -50,6 +60,10 @@ export default function FeedPage() {
         .eq('family_id', familyId)
         .eq('is_archived', filters.showArchived ? true : false),
     ])
+
+    if (familyData?.first_day_of_week) {
+      setFirstDayOfWeek(toDateFnsDay(familyData.first_day_of_week as FirstDayOfWeek))
+    }
 
     setMembers((membersData ?? []).map((m: any) => ({
       id: m.id,
@@ -94,10 +108,13 @@ export default function FeedPage() {
 
     const taskIds = enriched.map((t) => t.id)
     if (taskIds.length > 0) {
+      // Only load logs from the last 35 days — covers the current period for any cadence
+      const since = startOfMonth(subDays(new Date(), 6)).toISOString()
       const { data: logsData } = await supabase
         .from('log_entries')
         .select('*')
         .in('task_id', taskIds)
+        .gte('logged_at', since)
       setLogs((logsData ?? []).map((l: any) => ({
         id: l.id,
         taskId: l.task_id,
@@ -117,6 +134,7 @@ export default function FeedPage() {
     }
 
     setLoading(false)
+    setRefreshing(false)
   }, [filters.showArchived])
 
   useEffect(() => { loadData() }, [loadData])
@@ -130,7 +148,7 @@ export default function FeedPage() {
 
   function getProgress(task: TaskWithDetails): CadenceProgress {
     const taskLogs = logs.filter((l) => l.taskId === task.id)
-    return computeProgress(task, selectedMember, filters.timeWindow, taskLogs)
+    return computeProgress(task, selectedMember, taskLogs, firstDayOfWeek)
   }
 
   if (loading) {
@@ -163,6 +181,12 @@ export default function FeedPage() {
         </div>
 
         <FilterBar filters={filters} categories={categories} onChange={setFilters} />
+
+        {refreshing && (
+          <div className="flex items-center justify-center py-1">
+            <div className="h-4 w-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
+          </div>
+        )}
       </div>
 
       {/* Task list */}
@@ -198,7 +222,7 @@ export default function FeedPage() {
           memberId={selectedMember}
           members={members}
           onClose={() => setLogTaskId(null)}
-          onSaved={() => { setLogTaskId(null); loadData() }}
+          onSaved={() => { setLogTaskId(null); loadData(true) }}
         />
       )}
     </div>

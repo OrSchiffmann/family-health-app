@@ -3,14 +3,15 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { Member, Category, Tag, TaskType, CadencePer } from '@/types'
+import type { Member, Category, Tag, TaskType, CadencePer, Attachment, AttachmentType } from '@/types'
 
 interface Props {
   familyId: string
   members: Member[]
   categories: Category[]
   tags: Tag[]
-  taskId?: string // if editing
+  taskId?: string
+  initialAttachments?: Attachment[]
   defaults?: Partial<FormState>
 }
 
@@ -28,9 +29,22 @@ interface FormState {
   selectedTags: string[]
 }
 
-const STEPS = ['פרטים בסיסיים', 'תיאור', 'סוג ויעד', 'תאריך סיום', 'תגיות']
+interface AttachmentDraft {
+  id?: string
+  type: AttachmentType
+  url: string
+  title: string
+}
 
-export default function TaskForm({ familyId, members, categories, tags, taskId, defaults }: Props) {
+function detectType(url: string): AttachmentType {
+  if (/youtu(?:be\.com\/watch\?v=|\.be\/)/.test(url)) return 'youtube'
+  if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(url)) return 'image'
+  return 'link'
+}
+
+const STEPS = ['פרטים בסיסיים', 'תיאור וקבצים', 'סוג ויעד', 'תאריך סיום', 'תגיות']
+
+export default function TaskForm({ familyId, members, categories, tags, taskId, initialAttachments, defaults }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [step, setStep] = useState(0)
@@ -50,6 +64,17 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
     selectedTags: [],
     ...defaults,
   })
+
+  const [attachments, setAttachments] = useState<AttachmentDraft[]>(
+    (initialAttachments ?? []).map((a) => ({
+      id: a.id,
+      type: a.type,
+      url: a.url,
+      title: a.title ?? '',
+    }))
+  )
+  const [newUrl, setNewUrl] = useState('')
+  const [newTitle, setNewTitle] = useState('')
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -76,6 +101,18 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
         ? form.selectedTags.filter((t) => t !== id)
         : [...form.selectedTags, id]
     )
+  }
+
+  function addAttachment() {
+    const url = newUrl.trim()
+    if (!url) return
+    setAttachments((prev) => [...prev, { type: detectType(url), url, title: newTitle.trim() }])
+    setNewUrl('')
+    setNewTitle('')
+  }
+
+  function removeAttachment(index: number) {
+    setAttachments((prev) => prev.filter((_, i) => i !== index))
   }
 
   const visibleCategories = form.assignedMembers.length > 0
@@ -120,7 +157,6 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
 
     if (!savedTaskId) { setSaving(false); return }
 
-    // Create first cadence version (only on new tasks)
     if (!taskId) {
       await supabase.from('cadence_versions').insert({
         task_id: savedTaskId,
@@ -139,8 +175,29 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
       )
     }
 
+    // Sync attachments
+    await supabase.from('attachments').delete().eq('task_id', savedTaskId)
+    if (attachments.length > 0) {
+      await supabase.from('attachments').insert(
+        attachments.map((a) => ({
+          task_id: savedTaskId,
+          type: a.type,
+          url: a.url,
+          title: a.title || null,
+          thumbnail_url: null,
+        }))
+      )
+    }
+
     setSaving(false)
     router.push(`/tasks/${savedTaskId}`)
+  }
+
+  const attachmentTypeLabel: Record<AttachmentType, string> = {
+    youtube: 'YouTube',
+    image: 'תמונה',
+    link: 'לינק',
+    video: 'וידאו',
   }
 
   return (
@@ -159,7 +216,6 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
             <p className="text-xs text-gray-400">{STEPS[step]}</p>
           </div>
         </div>
-        {/* Progress dots */}
         <div className="flex gap-1.5">
           {STEPS.map((_, i) => (
             <div key={i} className={`h-1 flex-1 rounded-full transition-all ${i <= step ? 'bg-indigo-600' : 'bg-gray-200'}`} />
@@ -249,19 +305,77 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
           </>
         )}
 
-        {/* Step 2: Description */}
+        {/* Step 2: Description + Attachments */}
         {step === 1 && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">תיאור (Markdown, אופציונלי)</label>
-            <textarea
-              value={form.description}
-              onChange={(e) => update('description', e.target.value)}
-              rows={10}
-              placeholder="תאר את המשימה... תומך **עיצוב** _markdown_"
-              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm font-mono resize-none outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-            <p className="text-xs text-gray-400 mt-1">תומך בעיצוב Markdown: **מודגש**, _נטוי_, רשימות</p>
-          </div>
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">תיאור (Markdown, אופציונלי)</label>
+              <textarea
+                value={form.description}
+                onChange={(e) => update('description', e.target.value)}
+                rows={6}
+                placeholder="תאר את המשימה... תומך **עיצוב** _markdown_"
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm font-mono resize-none outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <p className="text-xs text-gray-400 mt-1">תומך בעיצוב Markdown: **מודגש**, _נטוי_, רשימות</p>
+            </div>
+
+            {/* Attachments */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">תמונות ולינקים</label>
+
+              {/* Existing attachments */}
+              {attachments.length > 0 && (
+                <div className="space-y-2 mb-3">
+                  {attachments.map((att, i) => (
+                    <div key={i} className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2.5">
+                      <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+                        {attachmentTypeLabel[att.type]}
+                      </span>
+                      <span className="flex-1 min-w-0 text-sm text-gray-700 truncate">
+                        {att.title || att.url}
+                      </span>
+                      <button
+                        onClick={() => removeAttachment(i)}
+                        className="shrink-0 text-gray-300 hover:text-red-400 transition-colors"
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add new attachment */}
+              <div className="space-y-2 rounded-xl border border-dashed border-gray-200 p-3">
+                <input
+                  type="url"
+                  value={newUrl}
+                  onChange={(e) => setNewUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addAttachment()}
+                  placeholder="הדבק לינק — תמונה, YouTube או אתר"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                  dir="ltr"
+                />
+                <input
+                  type="text"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="כותרת (אופציונלי)"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  onClick={addAttachment}
+                  disabled={!newUrl.trim()}
+                  className="w-full rounded-lg bg-gray-100 text-gray-700 py-2 text-sm font-medium disabled:opacity-40 hover:bg-gray-200 transition-colors"
+                >
+                  + הוסף
+                </button>
+              </div>
+            </div>
+          </>
         )}
 
         {/* Step 3: Type & Cadence */}
