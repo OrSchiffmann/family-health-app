@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { subDays, startOfMonth } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
@@ -10,6 +10,8 @@ import MemberChip from '@/components/ui/MemberChip'
 import ExecutionModal from '@/components/tasks/ExecutionModal'
 import type { TaskWithDetails, Member, Category, CadenceProgress, LogEntry, FirstDayOfWeek } from '@/types'
 import { computeProgress } from '@/lib/progress'
+import Toast from '@/components/ui/Toast'
+import Confetti from '@/components/ui/Confetti'
 
 function toDateFnsDay(d: FirstDayOfWeek): 0 | 1 | 6 {
   return d === 'sunday' ? 0 : d === 'monday' ? 1 : 6
@@ -27,6 +29,9 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [firstDayOfWeek, setFirstDayOfWeek] = useState<0 | 1 | 6>(0)
+  const [toast, setToast] = useState<{ message: string; variant: 'success' | 'celebrate' } | null>(null)
+  const [confetti, setConfetti] = useState(false)
+  const preLogProgressRef = useRef<CadenceProgress | null>(null)
 
   const [filters, setFilters] = useState<FeedFilters>({
     timeWindow: 'week',
@@ -151,6 +156,26 @@ export default function FeedPage() {
     return computeProgress(task, selectedMember, taskLogs, firstDayOfWeek)
   }
 
+  function handleLog(taskId: string) {
+    const task = filteredTasks.find((t) => t.id === taskId)
+    if (task) preLogProgressRef.current = getProgress(task)
+    setLogTaskId(taskId)
+  }
+
+  async function handleSaved(taskId: string) {
+    setLogTaskId(null)
+    await loadData(true)
+    // Check if this save pushed the task to 100%
+    const pre = preLogProgressRef.current
+    if (pre && pre.target > 0 && pre.achieved < pre.target) {
+      setConfetti(true)
+      setToast({ message: '🎉 כל הכבוד! המשימה הושלמה!', variant: 'celebrate' })
+    } else {
+      setToast({ message: '✓ נרשם!', variant: 'success' })
+    }
+    preLogProgressRef.current = null
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -209,11 +234,19 @@ export default function FeedPage() {
               members={members.filter((m) => task.assignedMembers.includes(m.id))}
               progress={getProgress(task)}
               showMembers={selectedMember === null}
-              onLog={setLogTaskId}
+              onLog={handleLog}
             />
           ))
         )}
       </div>
+
+      <Toast
+        message={toast?.message ?? ''}
+        show={!!toast}
+        variant={toast?.variant ?? 'success'}
+        onHide={() => setToast(null)}
+      />
+      <Confetti trigger={confetti} onDone={() => setConfetti(false)} />
 
       {/* Execution modal */}
       {logTaskId && (
@@ -222,7 +255,7 @@ export default function FeedPage() {
           memberId={selectedMember}
           members={members}
           onClose={() => setLogTaskId(null)}
-          onSaved={() => { setLogTaskId(null); loadData(true) }}
+          onSaved={() => handleSaved(logTaskId)}
         />
       )}
     </div>

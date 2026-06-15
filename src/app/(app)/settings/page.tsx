@@ -52,6 +52,9 @@ export default function SettingsPage() {
   const [newTagColor, setNewTagColor] = useState('#6366f1')
 
   // Invite
+  const [currentUser, setCurrentUser] = useState<{ id: string; displayName: string; avatarUrl: string | null } | null>(null)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<'editor' | 'user' | 'viewer'>('user')
   const [inviteLink, setInviteLink] = useState('')
@@ -68,6 +71,10 @@ export default function SettingsPage() {
 
       const fid = fu.family_id
       setFamilyId(fid)
+
+      const { data: profile } = await supabase
+        .from('user_profiles').select('id, display_name, avatar_url').eq('id', user.id).single()
+      if (profile) setCurrentUser({ id: profile.id, displayName: profile.display_name, avatarUrl: profile.avatar_url })
       setFamily(fu.families as any)
       setFamilyName(fu.families?.name ?? '')
       setFirstDay(fu.families?.first_day_of_week ?? 'sunday')
@@ -188,6 +195,20 @@ export default function SettingsPage() {
       setInviteEmail('')
     }
     setSaving(false)
+  }
+
+  async function handleAvatarUpload(file: File) {
+    if (!currentUser) return
+    setAvatarUploading(true)
+    const ext = file.name.split('.').pop()
+    const path = `${currentUser.id}.${ext}`
+    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
+    if (!upErr) {
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
+      await supabase.from('user_profiles').update({ avatar_url: publicUrl }).eq('id', currentUser.id)
+      setCurrentUser((prev) => prev ? { ...prev, avatarUrl: publicUrl } : prev)
+    }
+    setAvatarUploading(false)
   }
 
   async function handleSignOut() {
@@ -550,7 +571,45 @@ export default function SettingsPage() {
 
         {/* Account */}
         {tab === 'account' && (
-          <div className="space-y-4">
+          <div className="space-y-5">
+            {/* Avatar */}
+            {currentUser && (
+              <div className="flex flex-col items-center gap-4 py-2">
+                <label className="relative cursor-pointer group">
+                  <div className="h-24 w-24 rounded-full overflow-hidden bg-indigo-100 flex items-center justify-center ring-4 ring-white shadow-md">
+                    {currentUser.avatarUrl ? (
+                      <img src={currentUser.avatarUrl} alt={currentUser.displayName}
+                        className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-3xl font-bold text-indigo-400">
+                        {currentUser.displayName?.[0]?.toUpperCase() ?? '?'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="absolute inset-0 rounded-full bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    {avatarUploading ? (
+                      <div className="h-5 w-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    ) : (
+                      <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    )}
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAvatarUpload(f) }}
+                  />
+                </label>
+                <div className="text-center">
+                  <p className="font-semibold text-gray-800">{currentUser.displayName}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">לחץ על התמונה להחלפה</p>
+                </div>
+              </div>
+            )}
+
             <button onClick={handleSignOut}
               className="w-full rounded-xl border border-red-200 text-red-600 py-3 text-sm font-semibold">
               התנתקות
