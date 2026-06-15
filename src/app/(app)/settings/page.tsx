@@ -138,14 +138,17 @@ export default function SettingsPage() {
   }
 
   async function uploadMemberAvatar(memberId: string, file: File) {
-    const ext = file.name.split('.').pop()
+    const ext = file.name.split('.').pop() ?? 'jpg'
     const path = `member-${memberId}.${ext}`
     const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
-    if (!error) {
-      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
-      await supabase.from('members').update({ avatar_url: publicUrl }).eq('id', memberId)
-      setMembers((prev) => prev.map((m) => m.id === memberId ? { ...m, avatarUrl: publicUrl } : m))
+    if (error) {
+      alert(`שגיאה בהעלאת תמונה: ${error.message}`)
+      return
     }
+    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
+    const { error: dbErr } = await supabase.from('members').update({ avatar_url: publicUrl }).eq('id', memberId)
+    if (dbErr) { alert(`שגיאה בשמירה: ${dbErr.message}`); return }
+    setMembers((prev) => prev.map((m) => m.id === memberId ? { ...m, avatarUrl: publicUrl } : m))
   }
 
   async function saveCat() {
