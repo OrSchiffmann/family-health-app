@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, ReferenceLine, Legend
+  ComposedChart, Line,
 } from 'recharts'
 import { format, subDays, subMonths, eachDayOfInterval, parseISO } from 'date-fns'
 import { he } from 'date-fns/locale'
@@ -44,7 +44,10 @@ export default function StatisticsPage() {
           .eq('family_id', fu.family_id),
       ])
 
-      setMembers(membersData ?? [])
+      setMembers((membersData ?? []).map((m: any) => ({
+        id: m.id, familyId: m.family_id, name: m.name,
+        avatarColor: m.avatar_color, isArchived: m.is_archived, createdAt: m.created_at,
+      })))
 
       const cats: Category[] = []
       const enriched = (tasksData ?? []).map((t: any) => {
@@ -73,7 +76,14 @@ export default function StatisticsPage() {
         .in('task_id', (tasksData ?? []).map((t: any) => t.id))
         .gte('logged_at', since.toISOString())
 
-      computeFamilyStats(enriched, logs ?? [], membersData ?? [])
+      const mappedLogs = (logs ?? []).map((l: any) => ({
+        id: l.id, taskId: l.task_id, memberId: l.member_id, loggedBy: l.logged_by,
+        loggedAt: l.logged_at, executionTime: l.execution_time,
+        cadenceVersionId: l.cadence_version_id, completed: l.completed,
+        durationMinutes: l.duration_minutes, durationSeconds: l.duration_seconds,
+        notes: l.notes, tags: [],
+      }))
+      computeFamilyStats(enriched, mappedLogs, membersData ?? [])
     }
     load()
   }, [])
@@ -133,7 +143,13 @@ export default function StatisticsPage() {
       .eq('task_id', tid)
       .gte('logged_at', since.toISOString())
       .order('logged_at')
-    setTaskLogs(data ?? [])
+    setTaskLogs((data ?? []).map((l: any) => ({
+      id: l.id, taskId: l.task_id, memberId: l.member_id, loggedBy: l.logged_by,
+      loggedAt: l.logged_at, executionTime: l.execution_time,
+      cadenceVersionId: l.cadence_version_id, completed: l.completed,
+      durationMinutes: l.duration_minutes, durationSeconds: l.duration_seconds,
+      notes: l.notes, tags: [],
+    })))
   }
 
   useEffect(() => {
@@ -302,13 +318,13 @@ export default function StatisticsPage() {
                 {/* Chart */}
                 <section>
                   <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={buildTaskChartData()} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+                    <ComposedChart data={buildTaskChartData()} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
                       <XAxis dataKey="date" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
                       <YAxis tick={{ fontSize: 10 }} />
                       <Tooltip />
                       <Bar dataKey="value" name={selectedTaskData.taskType === 'duration' ? 'דקות' : 'ביצועים'} fill="#6366f1" radius={[3, 3, 0, 0]} />
                       <Line type="monotone" dataKey="target" stroke="#f59e0b" strokeDasharray="4 2" dot={false} name="יעד" />
-                    </BarChart>
+                    </ComposedChart>
                   </ResponsiveContainer>
                 </section>
 
