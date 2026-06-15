@@ -46,6 +46,7 @@ export default async function EditTaskPage({ params }: { params: Promise<{ id: s
     familyId: m.family_id,
     name: m.name,
     avatarColor: m.avatar_color,
+    avatarUrl: m.avatar_url ?? null,
     isArchived: m.is_archived,
     createdAt: m.created_at,
   }))

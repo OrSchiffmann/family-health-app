@@ -84,7 +84,11 @@ export default function SettingsPage() {
         supabase.from('family_users').select('*, user_profiles(display_name, avatar_url)').eq('family_id', fid),
         supabase.from('tags').select('*').eq('family_id', fid),
       ])
-      setMembers(membersData ?? [])
+      setMembers((membersData ?? []).map((m: any) => ({
+        id: m.id, familyId: m.family_id, name: m.name,
+        avatarColor: m.avatar_color, avatarUrl: m.avatar_url ?? null,
+        isArchived: m.is_archived, createdAt: m.created_at,
+      })))
       setUsers((usersData ?? []).map((u: any) => ({
         ...u,
         displayName: u.user_profiles?.display_name ?? u.user_id,
@@ -129,8 +133,19 @@ export default function SettingsPage() {
   async function saveMember() {
     if (!editMemberId || !editMemberName.trim()) return
     await supabase.rpc('update_member', { p_member_id: editMemberId, p_name: editMemberName.trim(), p_color: editMemberColor })
-    setMembers((prev) => prev.map((m: any) => m.id === editMemberId ? { ...m, name: editMemberName, avatar_color: editMemberColor } : m))
+    setMembers((prev) => prev.map((m) => m.id === editMemberId ? { ...m, name: editMemberName, avatarColor: editMemberColor } : m))
     setEditMemberId(null)
+  }
+
+  async function uploadMemberAvatar(memberId: string, file: File) {
+    const ext = file.name.split('.').pop()
+    const path = `member-${memberId}.${ext}`
+    const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
+    if (!error) {
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
+      await supabase.from('members').update({ avatar_url: publicUrl }).eq('id', memberId)
+      setMembers((prev) => prev.map((m) => m.id === memberId ? { ...m, avatarUrl: publicUrl } : m))
+    }
   }
 
   async function saveCat() {
@@ -322,12 +337,24 @@ export default function SettingsPage() {
                     </div>
                   ) : (
                     <div className="flex items-center gap-3">
-                      <span className="h-9 w-9 rounded-full flex items-center justify-center text-white font-bold text-base shrink-0"
-                        style={{ backgroundColor: m.avatar_color ?? m.avatarColor }}>
-                        {m.name[0]}
-                      </span>
+                      <label className="relative cursor-pointer shrink-0 group">
+                        <span className="h-10 w-10 rounded-full flex items-center justify-center text-white font-bold text-base overflow-hidden block"
+                          style={m.avatarUrl ? undefined : { backgroundColor: m.avatarColor }}>
+                          {m.avatarUrl
+                            ? <img src={m.avatarUrl} alt={m.name} className="h-full w-full object-cover" />
+                            : m.name[0]}
+                        </span>
+                        <span className="absolute inset-0 rounded-full bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                        </span>
+                        <input type="file" accept="image/*" className="sr-only"
+                          onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadMemberAvatar(m.id, f) }} />
+                      </label>
                       <span className="flex-1 font-medium text-gray-800">{m.name}</span>
-                      <button onClick={() => { setEditMemberId(m.id); setEditMemberName(m.name); setEditMemberColor(m.avatar_color ?? m.avatarColor) }}
+                      <button onClick={() => { setEditMemberId(m.id); setEditMemberName(m.name); setEditMemberColor(m.avatarColor) }}
                         className="text-xs text-indigo-500 hover:text-indigo-700 transition-colors">ערוך</button>
                       <button onClick={() => archiveMember(m.id)}
                         className="text-xs text-gray-400 hover:text-red-500 transition-colors">ארכיון</button>

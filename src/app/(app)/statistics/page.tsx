@@ -46,7 +46,8 @@ export default function StatisticsPage() {
 
       setMembers((membersData ?? []).map((m: any) => ({
         id: m.id, familyId: m.family_id, name: m.name,
-        avatarColor: m.avatar_color, isArchived: m.is_archived, createdAt: m.created_at,
+        avatarColor: m.avatar_color, avatarUrl: m.avatar_url ?? null,
+        isArchived: m.is_archived, createdAt: m.created_at,
       })))
 
       const cats: Category[] = []
@@ -242,9 +243,11 @@ export default function StatisticsPage() {
               <div className="space-y-3">
                 {familyStats.perMember.map(({ member, tasks: t, done }: any) => (
                   <div key={member.id} className="flex items-center gap-3">
-                    <span className="h-8 w-8 rounded-full text-white text-sm font-bold flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: member.avatarColor }}>
-                      {member.name[0]}
+                    <span className="h-8 w-8 rounded-full text-white text-sm font-bold flex items-center justify-center shrink-0 overflow-hidden"
+                      style={member.avatarUrl ? undefined : { backgroundColor: member.avatarColor }}>
+                      {member.avatarUrl
+                        ? <img src={member.avatarUrl} alt={member.name} className="h-full w-full object-cover" />
+                        : member.name[0]}
                     </span>
                     <div className="flex-1">
                       <div className="flex justify-between text-sm mb-1">

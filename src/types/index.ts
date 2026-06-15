@@ -17,6 +17,7 @@ export interface Member {
   familyId: string
   name: string
   avatarColor: string
+  avatarUrl: string | null
   isArchived: boolean
   createdAt: string
 }

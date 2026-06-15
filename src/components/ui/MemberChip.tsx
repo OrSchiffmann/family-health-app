@@ -2,13 +2,14 @@ import { clsx } from 'clsx'
 import type { Member } from '@/types'
 
 interface Props {
-  member: Member | { id: string; name: string; avatarColor: string }
+  member: Member | { id: string; name: string; avatarColor: string; avatarUrl?: string | null }
   selected?: boolean
   onClick?: () => void
   size?: 'sm' | 'md'
 }
 
 export default function MemberChip({ member, selected, onClick, size = 'md' }: Props) {
+  const avatarUrl = 'avatarUrl' in member ? member.avatarUrl : null
   return (
     <button
       onClick={onClick}
@@ -21,9 +22,13 @@ export default function MemberChip({ member, selected, onClick, size = 'md' }: P
       )}
     >
       <span
-        className={clsx('rounded-full shrink-0', size === 'md' ? 'h-5 w-5' : 'h-4 w-4')}
-        style={{ backgroundColor: member.avatarColor }}
-      />
+        className={clsx('rounded-full shrink-0 overflow-hidden flex items-center justify-center', size === 'md' ? 'h-5 w-5' : 'h-4 w-4')}
+        style={avatarUrl ? undefined : { backgroundColor: member.avatarColor }}
+      >
+        {avatarUrl
+          ? <img src={avatarUrl} alt={member.name} className="h-full w-full object-cover" />
+          : null}
+      </span>
       {member.name}
     </button>
   )
