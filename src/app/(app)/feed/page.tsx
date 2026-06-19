@@ -48,12 +48,13 @@ export default function FeedPage() {
 
     const { data: fu } = await supabase
       .from('family_users')
-      .select('family_id')
+      .select('family_id, is_approved')
       .eq('user_id', user.id)
       .limit(1)
       .single()
 
     if (!fu) { router.push('/onboarding'); return }
+    if (fu.is_approved === false) { router.push('/pending'); return }
     const familyId = fu.family_id
 
     const [{ data: familyData }, { data: membersData }, { data: tasksData }] = await Promise.all([

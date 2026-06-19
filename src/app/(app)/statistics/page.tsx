@@ -2,18 +2,53 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ComposedChart, Line } from 'recharts'
 import {
-  Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  ComposedChart, Line,
-} from 'recharts'
-import { format, subDays, subMonths, eachDayOfInterval, parseISO } from 'date-fns'
+  format, parseISO, eachDayOfInterval,
+  startOfDay, endOfDay, addDays,
+  startOfWeek, endOfWeek, addWeeks,
+  startOfMonth, endOfMonth, addMonths,
+  isSameDay,
+} from 'date-fns'
 import { he } from 'date-fns/locale'
 import type { Member, Category, TaskWithDetails, LogEntry } from '@/types'
 import { getActiveCadence } from '@/lib/progress'
 import MemberChip from '@/components/ui/MemberChip'
 
 type Tab = 'family' | 'task'
+type PeriodMode = 'day' | 'week' | 'month'
 type Range = '7d' | '30d' | '3m'
+
+function getPeriodBounds(mode: PeriodMode, offset: number, firstDayOfWeek: 0 | 1 | 6 = 0) {
+  const now = new Date()
+  if (mode === 'day') {
+    const d = addDays(startOfDay(now), offset)
+    return { start: d, end: endOfDay(d) }
+  }
+  if (mode === 'week') {
+    const ws = addWeeks(startOfWeek(now, { weekStartsOn: firstDayOfWeek }), offset)
+    return { start: ws, end: endOfWeek(ws, { weekStartsOn: firstDayOfWeek }) }
+  }
+  const ms = addMonths(startOfMonth(now), offset)
+  return { start: ms, end: endOfMonth(ms) }
+}
+
+function periodLabel(mode: PeriodMode, offset: number, firstDayOfWeek: 0 | 1 | 6 = 0): string {
+  const { start, end } = getPeriodBounds(mode, offset, firstDayOfWeek)
+  if (mode === 'day') {
+    if (offset === 0) return 'היום'
+    if (offset === -1) return 'אתמול'
+    return format(start, 'EEEE, d MMMM yyyy', { locale: he })
+  }
+  if (mode === 'week') {
+    if (offset === 0) return 'השבוע הנוכחי'
+    if (offset === -1) return 'שבוע שעבר'
+    return `${format(start, 'd MMM', { locale: he })} – ${format(end, 'd MMM yyyy', { locale: he })}`
+  }
+  if (offset === 0) return 'החודש הנוכחי'
+  if (offset === -1) return 'חודש שעבר'
+  return format(start, 'MMMM yyyy', { locale: he })
+}
 
 export default function StatisticsPage() {
   const supabase = createClient()
@@ -21,13 +56,18 @@ export default function StatisticsPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [tasks, setTasks] = useState<TaskWithDetails[]>([])
-  const [allLogs, setAllLogs] = useState<LogEntry[]>([])
+  const [periodLogs, setPeriodLogs] = useState<LogEntry[]>([])
   const [selectedMember, setSelectedMember] = useState<string | null>(null)
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([])
+  const [periodMode, setPeriodMode] = useState<PeriodMode>('week')
+  const [periodOffset, setPeriodOffset] = useState(0)
+  const [firstDayOfWeek, setFirstDayOfWeek] = useState<0 | 1 | 6>(0)
   const [selectedTask, setSelectedTask] = useState<string>('')
   const [taskLogs, setTaskLogs] = useState<LogEntry[]>([])
   const [range, setRange] = useState<Range>('30d')
   const [loading, setLoading] = useState(true)
+  const [logsLoading, setLogsLoading] = useState(false)
+  const [taskIds, setTaskIds] = useState<string[]>([])
 
   useEffect(() => {
     async function load() {
@@ -38,29 +78,31 @@ export default function StatisticsPage() {
         .from('family_users').select('family_id').eq('user_id', user.id).limit(1).single()
       if (!fu) return
 
-      const [{ data: membersData }, { data: tasksData }] = await Promise.all([
+      const [{ data: familyData }, { data: membersData }, { data: tasksData }] = await Promise.all([
+        supabase.from('families').select('first_day_of_week').eq('id', fu.family_id).single(),
         supabase.from('members').select('*').eq('family_id', fu.family_id).eq('is_archived', false),
         supabase.from('tasks').select('*, categories(*), subcategories(*), cadence_versions(*), tags(*), attachments(*)')
           .eq('family_id', fu.family_id).eq('is_archived', false),
       ])
 
-      const mappedMembers: Member[] = (membersData ?? []).map((m: any) => ({
+      if (familyData?.first_day_of_week) {
+        const d = familyData.first_day_of_week
+        setFirstDayOfWeek(d === 'sunday' ? 0 : d === 'monday' ? 1 : 6)
+      }
+
+      setMembers((membersData ?? []).map((m: any) => ({
         id: m.id, familyId: m.family_id, name: m.name,
         avatarColor: m.avatar_color, avatarUrl: m.avatar_url ?? null,
         isArchived: m.is_archived, createdAt: m.created_at,
-      }))
-      setMembers(mappedMembers)
+      })))
 
       const cats: Category[] = []
       const enriched: TaskWithDetails[] = (tasksData ?? []).map((t: any) => {
         if (t.categories && !cats.find((c: Category) => c.id === t.categories.id)) {
           cats.push({
-            id: t.categories.id,
-            memberId: t.categories.member_id,
-            name: t.categories.name,
-            color: t.categories.color,
-            isDefault: t.categories.is_default,
-            sortOrder: t.categories.sort_order,
+            id: t.categories.id, memberId: t.categories.member_id,
+            name: t.categories.name, color: t.categories.color,
+            isDefault: t.categories.is_default, sortOrder: t.categories.sort_order,
             subcategories: [],
           })
         }
@@ -78,37 +120,48 @@ export default function StatisticsPage() {
           mediaAttachments: t.attachments,
         }
       })
-
       setCategories(cats)
       setTasks(enriched)
-
-      const taskIds = enriched.map((t) => t.id)
-      if (taskIds.length > 0) {
-        const { data: logsData } = await supabase
-          .from('log_entries').select('*')
-          .in('task_id', taskIds)
-          .gte('logged_at', subDays(new Date(), 90).toISOString())
-        setAllLogs((logsData ?? []).map((l: any) => ({
-          id: l.id, taskId: l.task_id, memberId: l.member_id, loggedBy: l.logged_by,
-          loggedAt: l.logged_at, executionTime: l.execution_time,
-          cadenceVersionId: l.cadence_version_id, completed: l.completed,
-          durationMinutes: l.duration_minutes, durationSeconds: l.duration_seconds,
-          notes: l.notes, tags: [],
-        })))
-      }
+      setTaskIds(enriched.map((t) => t.id))
       setLoading(false)
     }
     load()
   }, [])
+
+  // Load logs whenever period changes or tasks are loaded
+  const loadPeriodLogs = useCallback(async (
+    ids: string[], mode: PeriodMode, offset: number, fdow: 0 | 1 | 6
+  ) => {
+    if (ids.length === 0) return
+    setLogsLoading(true)
+    const { start, end } = getPeriodBounds(mode, offset, fdow)
+    const { data } = await supabase
+      .from('log_entries').select('*')
+      .in('task_id', ids)
+      .gte('logged_at', start.toISOString())
+      .lte('logged_at', end.toISOString())
+    setPeriodLogs((data ?? []).map((l: any) => ({
+      id: l.id, taskId: l.task_id, memberId: l.member_id, loggedBy: l.logged_by,
+      loggedAt: l.logged_at, executionTime: l.execution_time,
+      cadenceVersionId: l.cadence_version_id, completed: l.completed,
+      durationMinutes: l.duration_minutes, durationSeconds: l.duration_seconds,
+      notes: l.notes, tags: [],
+    })))
+    setLogsLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (taskIds.length > 0) loadPeriodLogs(taskIds, periodMode, periodOffset, firstDayOfWeek)
+  }, [taskIds, periodMode, periodOffset, firstDayOfWeek, loadPeriodLogs])
 
   useEffect(() => {
     if (tab === 'task' && selectedTask) loadTaskStats(selectedTask)
   }, [selectedTask, range, tab])
 
   async function loadTaskStats(tid: string) {
-    const since = range === '7d' ? subDays(new Date(), 7)
-      : range === '30d' ? subDays(new Date(), 30)
-      : subMonths(new Date(), 3)
+    const since = range === '7d' ? new Date(Date.now() - 7 * 86400000)
+      : range === '30d' ? new Date(Date.now() - 30 * 86400000)
+      : new Date(Date.now() - 90 * 86400000)
     const { data } = await supabase
       .from('log_entries').select('*')
       .eq('task_id', tid)
@@ -134,15 +187,25 @@ export default function StatisticsPage() {
     setSelectedCategoryIds([])
   }
 
-  // Filter tasks for family tab
+  function changePeriod(delta: number) {
+    const next = periodOffset + delta
+    if (next > 0) return // can't go to future
+    setPeriodOffset(next)
+  }
+
+  function changePeriodMode(mode: PeriodMode) {
+    setPeriodMode(mode)
+    setPeriodOffset(0)
+  }
+
+  // Filter tasks + logs for family tab
   const filteredTasks = tasks.filter((t) => {
     if (selectedMember && !t.assignedMembers.includes(selectedMember)) return false
     if (selectedCategoryIds.length > 0 && !selectedCategoryIds.includes(t.categoryId)) return false
     return true
   })
 
-  // Filter logs for family tab
-  const filteredLogs = allLogs.filter((l) => {
+  const filteredLogs = periodLogs.filter((l) => {
     if (selectedMember && l.memberId !== selectedMember) return false
     const task = tasks.find((t) => t.id === l.taskId)
     if (!task) return false
@@ -150,35 +213,35 @@ export default function StatisticsPage() {
     return true
   })
 
-  // Visible categories based on selected member
   const visibleCategories = selectedMember
     ? categories.filter((c) => c.memberId === selectedMember)
     : categories
 
-  // Family stats computed from filtered data
+  // Compute stats for selected period
+  const { start: periodStart, end: periodEnd } = getPeriodBounds(periodMode, periodOffset, firstDayOfWeek)
+
   const familyStats = (() => {
-    const since30 = subDays(new Date(), 30)
-    const recentLogs = filteredLogs.filter((l) => new Date(l.loggedAt) >= since30)
     const totalTasks = filteredTasks.length
     const completedTaskIds = new Set<string>()
     const partialTaskIds = new Set<string>()
+
     for (const task of filteredTasks) {
-      const cadence = getActiveCadence(task.cadenceVersions, new Date())
+      const cadence = getActiveCadence(task.cadenceVersions, periodEnd)
       if (!cadence) continue
       const target = task.taskType === 'duration' ? (cadence.targetMinutes ?? 0) : (cadence.targetCount ?? 0)
-      const taskRecentLogs = recentLogs.filter((l) => l.taskId === task.id)
+      const taskLogs = filteredLogs.filter((l) => l.taskId === task.id)
       const achieved = task.taskType === 'duration'
-        ? taskRecentLogs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0)
-        : taskRecentLogs.filter((l) => l.completed).length
+        ? taskLogs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0)
+        : taskLogs.filter((l) => l.completed).length
       if (achieved >= target && target > 0) completedTaskIds.add(task.id)
       else if (achieved > 0) partialTaskIds.add(task.id)
     }
 
     const perMember = (selectedMember ? members.filter((m) => m.id === selectedMember) : members).map((m) => {
       const mTasks = filteredTasks.filter((t) => t.assignedMembers.includes(m.id))
-      const mLogs = recentLogs.filter((l) => l.memberId === m.id)
+      const mLogs = filteredLogs.filter((l) => l.memberId === m.id)
       const done = mTasks.filter((t) => {
-        const cadence = getActiveCadence(t.cadenceVersions, new Date())
+        const cadence = getActiveCadence(t.cadenceVersions, periodEnd)
         if (!cadence) return false
         const target = t.taskType === 'duration' ? (cadence.targetMinutes ?? 0) : (cadence.targetCount ?? 0)
         const achieved = t.taskType === 'duration'
@@ -189,12 +252,13 @@ export default function StatisticsPage() {
       return { member: m, tasks: mTasks.length, done }
     })
 
-    const days = eachDayOfInterval({ start: subDays(new Date(), 13), end: new Date() })
+    // Bar chart: days in period
+    const days = eachDayOfInterval({ start: periodStart, end: periodEnd })
     const barData = days.map((d) => ({
-      date: format(d, 'd/M'),
+      date: format(d, periodMode === 'month' ? 'd' : 'EEE d/M', { locale: he }),
       completions: filteredLogs.filter((l) => {
         const ld = parseISO(l.loggedAt)
-        return ld.toDateString() === d.toDateString() && (l.completed || (l.durationMinutes ?? 0) > 0)
+        return isSameDay(ld, d) && (l.completed || (l.durationMinutes ?? 0) > 0)
       }).length,
     }))
 
@@ -206,11 +270,11 @@ export default function StatisticsPage() {
   function buildTaskChartData() {
     if (!selectedTaskData || taskLogs.length === 0) return []
     const days = eachDayOfInterval({
-      start: subDays(new Date(), range === '7d' ? 6 : range === '30d' ? 29 : 89),
+      start: new Date(Date.now() - (range === '7d' ? 6 : range === '30d' ? 29 : 89) * 86400000),
       end: new Date(),
     })
     return days.map((d) => {
-      const dayLogs = taskLogs.filter((l) => parseISO(l.loggedAt).toDateString() === d.toDateString())
+      const dayLogs = taskLogs.filter((l) => isSameDay(parseISO(l.loggedAt), d))
       const value = selectedTaskData.taskType === 'duration'
         ? dayLogs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0)
         : dayLogs.filter((l) => l.completed).length
@@ -249,9 +313,43 @@ export default function StatisticsPage() {
         </div>
       </div>
 
-      {/* Member + Category filters (family tab only) */}
+      {/* Period navigation + member/category filter (family tab) */}
       {tab === 'family' && (
-        <div className="px-4 pt-3 pb-2 space-y-2 bg-white border-b border-gray-100">
+        <div className="px-4 pt-3 pb-2 space-y-2.5 bg-white border-b border-gray-100">
+          {/* Period mode */}
+          <div className="flex gap-1.5">
+            {(['day', 'week', 'month'] as PeriodMode[]).map((mode) => (
+              <button key={mode} onClick={() => changePeriodMode(mode)}
+                className={`flex-1 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                  periodMode === mode ? 'text-white border-transparent' : 'border-gray-200 text-gray-600'
+                }`}
+                style={periodMode === mode ? { background: 'linear-gradient(135deg, #0AB5B5, #06B6D4)' } : {}}>
+                {mode === 'day' ? 'יום' : mode === 'week' ? 'שבוע' : 'חודש'}
+              </button>
+            ))}
+          </div>
+
+          {/* Period navigation */}
+          <div className="flex items-center gap-3">
+            <button onClick={() => changePeriod(-1)}
+              className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-200 transition-colors shrink-0">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <span className="flex-1 text-center text-sm font-semibold text-gray-800">
+              {logsLoading
+                ? <span className="inline-block h-4 w-24 bg-gray-200 rounded animate-pulse" />
+                : periodLabel(periodMode, periodOffset, firstDayOfWeek)}
+            </span>
+            <button onClick={() => changePeriod(1)} disabled={periodOffset >= 0}
+              className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-200 disabled:opacity-30 transition-colors shrink-0">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+
           {/* Member chips */}
           <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
             <MemberChip
@@ -264,6 +362,7 @@ export default function StatisticsPage() {
                 onClick={() => handleSelectMember(m.id)} />
             ))}
           </div>
+
           {/* Category chips */}
           {visibleCategories.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
@@ -288,60 +387,71 @@ export default function StatisticsPage() {
       <div className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
         {tab === 'family' && (
           <>
-            {/* Overview cards */}
-            <div className="grid grid-cols-3 gap-3">
-              <StatCard label="הושלמו" value={`${familyStats.completed}/${familyStats.totalTasks}`} color="green" />
-              <StatCard label="חלקית" value={String(familyStats.partial)} color="amber" />
-              <StatCard label="השלמה" value={`${Math.round(familyStats.completed / Math.max(familyStats.totalTasks, 1) * 100)}%`} color="teal" />
-            </div>
-
-            {/* Bar chart */}
-            <section>
-              <h2 className="text-sm font-semibold text-gray-500 mb-3">ביצועים - 14 ימים אחרונים</h2>
-              <ResponsiveContainer width="100%" height={160}>
-                <ComposedChart data={familyStats.barData} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
-                  <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip />
-                  <Bar dataKey="completions" fill="#0AB5B5" radius={[4, 4, 0, 0]} />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </section>
-
-            {/* Per member */}
-            {familyStats.perMember.length > 0 && (
-              <section>
-                <h2 className="text-sm font-semibold text-gray-500 mb-3">לפי חבר משפחה</h2>
-                <div className="space-y-3">
-                  {familyStats.perMember.map(({ member, tasks: t, done }: any) => (
-                    <div key={member.id} className="flex items-center gap-3">
-                      <span className="h-8 w-8 rounded-full text-white text-sm font-bold flex items-center justify-center shrink-0 overflow-hidden"
-                        style={member.avatarUrl ? undefined : { backgroundColor: member.avatarColor }}>
-                        {member.avatarUrl
-                          ? <img src={member.avatarUrl} alt={member.name} className="h-full w-full object-cover" />
-                          : member.name?.[0]}
-                      </span>
-                      <div className="flex-1">
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="font-medium text-gray-800">{member.name}</span>
-                          <span className="text-gray-500">{done}/{t}</span>
-                        </div>
-                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full transition-all"
-                            style={{
-                              width: `${t > 0 ? (done / t) * 100 : 0}%`,
-                              background: 'linear-gradient(90deg, #0AB5B5, #06B6D4)',
-                            }} />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+            {logsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="h-6 w-6 rounded-full border-2 border-teal-600 border-t-transparent animate-spin" />
+              </div>
+            ) : (
+              <>
+                {/* Overview cards */}
+                <div className="grid grid-cols-3 gap-3">
+                  <StatCard label="הושלמו" value={`${familyStats.completed}/${familyStats.totalTasks}`} color="green" />
+                  <StatCard label="חלקית" value={String(familyStats.partial)} color="amber" />
+                  <StatCard label="השלמה" value={`${Math.round(familyStats.completed / Math.max(familyStats.totalTasks, 1) * 100)}%`} color="teal" />
                 </div>
-              </section>
-            )}
 
-            {familyStats.totalTasks === 0 && (
-              <p className="text-center text-sm text-gray-400 py-8">אין משימות לתצוגה</p>
+                {/* Bar chart */}
+                {familyStats.barData.length > 0 && filteredLogs.length > 0 && (
+                  <section>
+                    <h2 className="text-sm font-semibold text-gray-500 mb-3">ביצועים</h2>
+                    <ResponsiveContainer width="100%" height={150}>
+                      <ComposedChart data={familyStats.barData} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+                        <XAxis dataKey="date" tick={{ fontSize: periodMode === 'month' ? 9 : 10 }}
+                          interval={periodMode === 'month' ? 6 : 0} />
+                        <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                        <Tooltip />
+                        <Bar dataKey="completions" name="ביצועים" fill="#0AB5B5" radius={[4, 4, 0, 0]} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </section>
+                )}
+
+                {filteredLogs.length === 0 && (
+                  <p className="text-center text-sm text-gray-400 py-4">אין ביצועים בתקופה זו</p>
+                )}
+
+                {/* Per member */}
+                {familyStats.perMember.length > 0 && familyStats.totalTasks > 0 && (
+                  <section>
+                    <h2 className="text-sm font-semibold text-gray-500 mb-3">לפי חבר משפחה</h2>
+                    <div className="space-y-3">
+                      {familyStats.perMember.map(({ member, tasks: t, done }: any) => (
+                        <div key={member.id} className="flex items-center gap-3">
+                          <span className="h-8 w-8 rounded-full text-white text-sm font-bold flex items-center justify-center shrink-0 overflow-hidden"
+                            style={member.avatarUrl ? undefined : { backgroundColor: member.avatarColor }}>
+                            {member.avatarUrl
+                              ? <img src={member.avatarUrl} alt={member.name} className="h-full w-full object-cover" />
+                              : member.name?.[0]}
+                          </span>
+                          <div className="flex-1">
+                            <div className="flex justify-between text-sm mb-1">
+                              <span className="font-medium text-gray-800">{member.name}</span>
+                              <span className="text-gray-500">{done}/{t}</span>
+                            </div>
+                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full transition-all"
+                                style={{
+                                  width: `${t > 0 ? (done / t) * 100 : 0}%`,
+                                  background: 'linear-gradient(90deg, #0AB5B5, #06B6D4)',
+                                }} />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </>
             )}
           </>
         )}
@@ -351,11 +461,8 @@ export default function StatisticsPage() {
             {/* Task selector */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">בחר משימה</label>
-              <select
-                value={selectedTask}
-                onChange={(e) => setSelectedTask(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm bg-white outline-none focus:ring-2 focus:ring-teal-500"
-              >
+              <select value={selectedTask} onChange={(e) => setSelectedTask(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm bg-white outline-none focus:ring-2 focus:ring-teal-500">
                 <option value="">-- בחר משימה --</option>
                 {tasks.map((t) => (
                   <option key={t.id} value={t.id}>{t.title}</option>
@@ -381,7 +488,6 @@ export default function StatisticsPage() {
 
             {selectedTaskData && taskLogs.length > 0 && (
               <>
-                {/* Summary */}
                 <div className="grid grid-cols-2 gap-3">
                   {selectedTaskData.taskType === 'duration' ? (
                     <>
@@ -398,7 +504,6 @@ export default function StatisticsPage() {
                   )}
                 </div>
 
-                {/* Chart */}
                 <section>
                   <ResponsiveContainer width="100%" height={200}>
                     <ComposedChart data={buildTaskChartData()} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
@@ -411,7 +516,6 @@ export default function StatisticsPage() {
                   </ResponsiveContainer>
                 </section>
 
-                {/* Log list */}
                 <section>
                   <h2 className="text-sm font-semibold text-gray-500 mb-3">רשומות</h2>
                   <div className="space-y-2">

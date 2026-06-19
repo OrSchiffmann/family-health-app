@@ -55,6 +55,7 @@ export default function SettingsPage() {
   const [currentUser, setCurrentUser] = useState<{ id: string; displayName: string; avatarUrl: string | null } | null>(null)
   const [avatarUploading, setAvatarUploading] = useState(false)
 
+  const [pendingUsers, setPendingUsers] = useState<any[]>([])
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<'editor' | 'user' | 'viewer'>('user')
   const [inviteLink, setInviteLink] = useState('')
@@ -89,12 +90,14 @@ export default function SettingsPage() {
         avatarColor: m.avatar_color, avatarUrl: m.avatar_url ?? null,
         isArchived: m.is_archived, createdAt: m.created_at,
       })))
-      setUsers((usersData ?? []).map((u: any) => ({
+      const allUsers = (usersData ?? []).map((u: any) => ({
         ...u,
         displayName: u.user_profiles?.display_name ?? u.user_id,
         email: '',
         joinedAt: u.joined_at,
-      })))
+      }))
+      setUsers(allUsers.filter((u: any) => u.is_approved !== false))
+      setPendingUsers(allUsers.filter((u: any) => u.is_approved === false))
       setTags(tagsData ?? [])
 
       if ((membersData ?? []).length > 0) {
@@ -175,6 +178,20 @@ export default function SettingsPage() {
   async function unarchiveMember(id: string) {
     await supabase.from('members').update({ is_archived: false }).eq('id', id)
     setMembers((prev) => prev.map((m) => m.id === id ? { ...m, isArchived: false } : m))
+  }
+
+  async function approveUser(userId: string) {
+    await supabase.from('family_users').update({ is_approved: true }).eq('user_id', userId).eq('family_id', familyId)
+    setPendingUsers((prev) => {
+      const approved = prev.find((u) => u.user_id === userId)
+      if (approved) setUsers((u) => [...u, { ...approved, is_approved: true }])
+      return prev.filter((u) => u.user_id !== userId)
+    })
+  }
+
+  async function rejectUser(userId: string) {
+    await supabase.from('family_users').delete().eq('user_id', userId).eq('family_id', familyId)
+    setPendingUsers((prev) => prev.filter((u) => u.user_id !== userId))
   }
 
   async function addTag() {
@@ -511,6 +528,39 @@ export default function SettingsPage() {
         {/* Users */}
         {tab === 'users' && (
           <>
+            {/* Pending approval */}
+            {pendingUsers.length > 0 && (
+              <div className="rounded-2xl border-2 border-amber-200 bg-amber-50 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+                  <h3 className="text-sm font-semibold text-amber-800">ממתינים לאישור ({pendingUsers.length})</h3>
+                </div>
+                <div className="space-y-2">
+                  {pendingUsers.map((u) => (
+                    <div key={u.id} className="flex items-center gap-3 rounded-xl bg-white border border-amber-100 p-3">
+                      <div className="h-9 w-9 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm shrink-0">
+                        {u.displayName?.[0]?.toUpperCase() ?? '?'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-800 truncate">{u.displayName}</p>
+                        <p className="text-xs text-gray-400">מבקש הצטרפות</p>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button onClick={() => approveUser(u.user_id)}
+                          className="rounded-lg bg-teal-600 text-white px-3 py-1.5 text-xs font-semibold">
+                          אשר
+                        </button>
+                        <button onClick={() => rejectUser(u.user_id)}
+                          className="rounded-lg border border-gray-200 text-gray-500 px-3 py-1.5 text-xs">
+                          דחה
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
               {users.map((u) => (
                 <div key={u.id} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-3">
