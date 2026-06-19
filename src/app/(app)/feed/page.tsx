@@ -37,6 +37,7 @@ export default function FeedPage() {
     timeWindow: 'week',
     categoryIds: [],
     taskType: 'all',
+    progressStatus: 'all',
     showArchived: false,
   })
 
@@ -154,12 +155,31 @@ export default function FeedPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  const filteredTasks = tasks.filter((t) => {
-    if (selectedMember && !t.assignedMembers.includes(selectedMember)) return false
-    if (filters.categoryIds.length > 0 && !filters.categoryIds.includes(t.categoryId)) return false
-    if (filters.taskType !== 'all' && t.taskType !== filters.taskType) return false
-    return true
-  })
+  function getStatusScore(task: TaskWithDetails): 0 | 1 | 2 {
+    const p = getProgress(task)
+    if (p.target === 0) return 0
+    if (p.achieved >= p.target) return 2      // done
+    if (p.achieved > 0) return 1              // in_progress
+    return 0                                  // open
+  }
+
+  const filteredTasks = tasks
+    .filter((t) => {
+      if (selectedMember && !t.assignedMembers.includes(selectedMember)) return false
+      if (filters.categoryIds.length > 0 && !filters.categoryIds.includes(t.categoryId)) return false
+      if (filters.taskType !== 'all' && t.taskType !== filters.taskType) return false
+      if (filters.progressStatus !== 'all') {
+        const score = getStatusScore(t)
+        if (filters.progressStatus === 'open' && score !== 0) return false
+        if (filters.progressStatus === 'in_progress' && score !== 1) return false
+        if (filters.progressStatus === 'done' && score !== 2) return false
+      }
+      return true
+    })
+    .sort((a, b) => {
+      // open (0) → in_progress (1) → done (2)
+      return getStatusScore(a) - getStatusScore(b)
+    })
 
   function getProgress(task: TaskWithDetails): CadenceProgress {
     const taskLogs = logs.filter((l) => l.taskId === task.id)

@@ -5,11 +5,13 @@ import type { Category } from '@/types'
 
 export type TimeWindow = 'today' | 'week' | 'month' | 'all'
 export type TaskTypeFilter = 'all' | 'done_not_done' | 'duration'
+export type ProgressStatus = 'all' | 'open' | 'in_progress' | 'done'
 
 export interface FeedFilters {
   timeWindow: TimeWindow
   categoryIds: string[]
   taskType: TaskTypeFilter
+  progressStatus: ProgressStatus
   showArchived: boolean
 }
 
@@ -69,6 +71,28 @@ export default function FilterBar({ filters, categories, selectedMember, onChang
         >
           ארכיון
         </button>
+      </div>
+
+      {/* Progress status */}
+      <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+        {([
+          { value: 'all', label: 'כל הסטטוסים' },
+          { value: 'open', label: '○ לא התחיל' },
+          { value: 'in_progress', label: '◑ בתהליך' },
+          { value: 'done', label: '● הושלם' },
+        ] as { value: ProgressStatus; label: string }[]).map(({ value, label }) => (
+          <button
+            key={value}
+            onClick={() => onChange({ ...filters, progressStatus: value })}
+            className="shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all"
+            style={filters.progressStatus === value
+              ? { background: 'linear-gradient(135deg, #0AB5B5, #06B6D4)', color: 'white' }
+              : { backgroundColor: 'white', color: '#6B7280' }
+            }
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* Categories */}
