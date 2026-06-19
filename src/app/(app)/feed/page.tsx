@@ -83,7 +83,15 @@ export default function FeedPage() {
     const cats: Category[] = []
     const enriched: TaskWithDetails[] = (tasksData ?? []).map((t: any) => {
       if (t.categories && !cats.find((c: Category) => c.id === t.categories.id)) {
-        cats.push({ ...t.categories, subcategories: [] })
+        cats.push({
+          id: t.categories.id,
+          memberId: t.categories.member_id,
+          name: t.categories.name,
+          color: t.categories.color,
+          isDefault: t.categories.is_default,
+          sortOrder: t.categories.sort_order,
+          subcategories: [],
+        })
       }
       return {
         ...t,
@@ -194,19 +202,19 @@ export default function FeedPage() {
           <MemberChip
             member={{ id: 'all', name: 'הכל', avatarColor: '#6366f1' }}
             selected={selectedMember === null}
-            onClick={() => setSelectedMember(null)}
+            onClick={() => { setSelectedMember(null); setFilters(f => ({ ...f, categoryIds: [] })) }}
           />
           {members.map((m) => (
             <MemberChip
               key={m.id}
               member={m}
               selected={selectedMember === m.id}
-              onClick={() => setSelectedMember(m.id)}
+              onClick={() => { setSelectedMember(m.id); setFilters(f => ({ ...f, categoryIds: [] })) }}
             />
           ))}
         </div>
 
-        <FilterBar filters={filters} categories={categories} onChange={setFilters} />
+        <FilterBar filters={filters} categories={categories} selectedMember={selectedMember} onChange={setFilters} />
 
         {refreshing && (
           <div className="flex items-center justify-center py-1">

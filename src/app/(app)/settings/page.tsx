@@ -169,7 +169,12 @@ export default function SettingsPage() {
 
   async function archiveMember(id: string) {
     await supabase.from('members').update({ is_archived: true }).eq('id', id)
-    setMembers((prev) => prev.filter((m) => m.id !== id))
+    setMembers((prev) => prev.map((m) => m.id === id ? { ...m, isArchived: true } : m))
+  }
+
+  async function unarchiveMember(id: string) {
+    await supabase.from('members').update({ is_archived: false }).eq('id', id)
+    setMembers((prev) => prev.map((m) => m.id === id ? { ...m, isArchived: false } : m))
   }
 
   async function addTag() {
@@ -356,11 +361,19 @@ export default function SettingsPage() {
                         <input type="file" accept="image/*" className="sr-only"
                           onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadMemberAvatar(m.id, f) }} />
                       </label>
-                      <span className="flex-1 font-medium text-gray-800">{m.name}</span>
+                      <span className="flex-1 font-medium text-gray-800">
+                        {m.name}
+                        {m.isArchived && <span className="mr-1 text-xs text-gray-400 font-normal">(בארכיון)</span>}
+                      </span>
                       <button onClick={() => { setEditMemberId(m.id); setEditMemberName(m.name); setEditMemberColor(m.avatarColor) }}
                         className="text-xs text-teal-500 hover:text-teal-700 transition-colors">ערוך</button>
-                      <button onClick={() => archiveMember(m.id)}
-                        className="text-xs text-gray-400 hover:text-red-500 transition-colors">ארכיון</button>
+                      {m.isArchived ? (
+                        <button onClick={() => unarchiveMember(m.id)}
+                          className="text-xs text-teal-500 hover:text-teal-700 transition-colors">שחזר</button>
+                      ) : (
+                        <button onClick={() => archiveMember(m.id)}
+                          className="text-xs text-gray-400 hover:text-red-500 transition-colors">ארכיון</button>
+                      )}
                     </div>
                   )}
                 </div>

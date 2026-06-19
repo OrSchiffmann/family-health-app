@@ -16,6 +16,7 @@ export interface FeedFilters {
 interface Props {
   filters: FeedFilters
   categories: Category[]
+  selectedMember?: string | null
   onChange: (f: FeedFilters) => void
 }
 
@@ -26,7 +27,11 @@ const TIME_WINDOWS: { value: TimeWindow; label: string }[] = [
   { value: 'all', label: 'הכל' },
 ]
 
-export default function FilterBar({ filters, categories, onChange }: Props) {
+export default function FilterBar({ filters, categories, selectedMember, onChange }: Props) {
+  const visibleCategories = selectedMember
+    ? categories.filter((c) => c.memberId === selectedMember)
+    : categories
+
   function toggleCategory(id: string) {
     const next = filters.categoryIds.includes(id)
       ? filters.categoryIds.filter((c) => c !== id)
@@ -67,9 +72,9 @@ export default function FilterBar({ filters, categories, onChange }: Props) {
       </div>
 
       {/* Categories */}
-      {categories.length > 0 && (
+      {visibleCategories.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {categories.map((cat) => (
+          {visibleCategories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => toggleCategory(cat.id)}
