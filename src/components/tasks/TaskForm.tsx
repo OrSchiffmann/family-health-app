@@ -13,6 +13,7 @@ interface Props {
   taskId?: string
   initialAttachments?: Attachment[]
   defaults?: Partial<FormState>
+  initialStep?: number
 }
 
 interface FormState {
@@ -44,10 +45,10 @@ function detectType(url: string): AttachmentType {
 
 const STEPS = ['פרטים בסיסיים', 'תיאור וקבצים', 'סוג ויעד', 'תאריך סיום', 'תגיות']
 
-export default function TaskForm({ familyId, members, categories, tags, taskId, initialAttachments, defaults }: Props) {
+export default function TaskForm({ familyId, members, categories, tags, taskId, initialAttachments, defaults, initialStep }: Props) {
   const router = useRouter()
   const supabase = createClient()
-  const [step, setStep] = useState(0)
+  const [step, setStep] = useState(initialStep ?? 0)
   const [saving, setSaving] = useState(false)
 
   const [form, setForm] = useState<FormState>({
@@ -157,15 +158,14 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
 
     if (!savedTaskId) { setSaving(false); return }
 
-    if (!taskId) {
-      await supabase.from('cadence_versions').insert({
-        task_id: savedTaskId,
-        effective_from: new Date().toISOString().split('T')[0],
-        target_count: form.taskType === 'done_not_done' ? parseInt(form.targetCount) : null,
-        target_minutes: form.taskType === 'duration' ? parseInt(form.targetMinutes) : null,
-        per: form.per,
-      })
-    }
+    // Always upsert cadence — insert new version (effective today) for both create and edit
+    await supabase.from('cadence_versions').insert({
+      task_id: savedTaskId,
+      effective_from: new Date().toISOString().split('T')[0],
+      target_count: form.taskType === 'done_not_done' ? parseInt(form.targetCount) : null,
+      target_minutes: form.taskType === 'duration' ? parseInt(form.targetMinutes) : null,
+      per: form.per,
+    })
 
     // Sync tags
     await supabase.from('task_tags').delete().eq('task_id', savedTaskId)

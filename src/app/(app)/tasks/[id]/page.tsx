@@ -253,7 +253,7 @@ export default function TaskDetailPage() {
           <section>
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">יעד</h2>
-              <Link href={`/tasks/${id}/cadence`} className="text-xs text-teal-600 font-medium">עדכן יעד</Link>
+              <Link href={`/tasks/${id}/edit?step=2`} className="text-xs text-teal-600 font-medium">עדכן יעד</Link>
             </div>
             <div className="rounded-xl bg-gray-50 p-3">
               <p className="text-sm text-gray-700">

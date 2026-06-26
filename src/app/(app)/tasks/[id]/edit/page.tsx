@@ -3,8 +3,16 @@ import { redirect, notFound } from 'next/navigation'
 import TaskForm from '@/components/tasks/TaskForm'
 import type { TaskType, CadencePer } from '@/types'
 
-export default async function EditTaskPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditTaskPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ step?: string }>
+}) {
   const { id } = await params
+  const { step } = await searchParams
+  const initialStep = step ? parseInt(step) : undefined
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -83,6 +91,7 @@ export default async function EditTaskPage({ params }: { params: Promise<{ id: s
       tags={tags ?? []}
       taskId={id}
       initialAttachments={mappedAttachments}
+      initialStep={initialStep}
       defaults={{
         title: t.title ?? '',
         assignedMembers: memberIds,
