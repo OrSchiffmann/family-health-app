@@ -70,6 +70,7 @@ export default function StatisticsPage() {
   const [periodMode, setPeriodMode] = useState<PeriodMode>('week')
   const [periodOffset, setPeriodOffset] = useState(0)
   const [firstDayOfWeek, setFirstDayOfWeek] = useState<0 | 1 | 6>(0)
+  const [metric, setMetric] = useState<'completion' | 'execution'>('completion')
   const [selectedTask, setSelectedTask] = useState<string>('')
   const [taskLogs, setTaskLogs] = useState<LogEntry[]>([])
   const [range, setRange] = useState<Range>('30d')
@@ -199,47 +200,32 @@ export default function StatisticsPage() {
   const prevPeriodLogs = filterLogs(logsInPeriod(allLogs, periodMode, periodOffset - 1, firstDayOfWeek))
 
   // ── SUMMARY stats ──────────────────────────────────────────────
-  function calcCompletion(logs: LogEntry[], taskList: TaskWithDetails[], forPeriodOffset: number) {
-    let completed = 0
-    for (const task of taskList) {
-      const cadence = getActiveCadence(task.cadenceVersions, new Date())
-      if (!cadence) continue
-      const target = task.taskType === 'duration' ? (cadence.targetMinutes ?? 0) : (cadence.targetCount ?? 0)
-      const achieved = task.taskType === 'duration'
-        ? logs.filter((l) => l.taskId === task.id).reduce((s, l) => s + (l.durationMinutes ?? 0), 0)
-        : logs.filter((l) => l.taskId === task.id && l.completed).length
-      if (achieved >= target && target > 0) completed++
-    }
+  function taskCounts(logs: LogEntry[], task: TaskWithDetails) {
+    const taskLogs = logs.filter((l) => l.taskId === task.id)
+    const achieved = task.taskType === 'duration'
+      ? taskLogs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0)
+      : taskLogs.filter((l) => l.completed).length
+    if (metric === 'execution') return achieved > 0
+    const cadence = getActiveCadence(task.cadenceVersions, new Date())
+    if (!cadence) return false
+    const target = task.taskType === 'duration' ? (cadence.targetMinutes ?? 0) : (cadence.targetCount ?? 0)
+    return achieved >= target && target > 0
+  }
+
+  function calcCompletion(logs: LogEntry[], taskList: TaskWithDetails[]) {
+    const completed = taskList.filter((t) => taskCounts(logs, t)).length
     return { completed, total: taskList.length }
   }
-  const curr = calcCompletion(periodLogs, filteredTasks, periodOffset)
-  const prev = calcCompletion(prevPeriodLogs, filteredTasks, periodOffset - 1)
+  const curr = calcCompletion(periodLogs, filteredTasks)
+  const prev = calcCompletion(prevPeriodLogs, filteredTasks)
   const currPct = curr.total > 0 ? Math.round(curr.completed / curr.total * 100) : 0
   const prevPct = prev.total > 0 ? Math.round(prev.completed / prev.total * 100) : 0
   const delta = currPct - prevPct
 
   const perMember = (selectedMember ? members.filter((m) => m.id === selectedMember) : members).map((m) => {
     const mTasks = filteredTasks.filter((t) => t.assignedMembers.includes(m.id))
-    const mCurr = mTasks.filter((t) => {
-      const cadence = getActiveCadence(t.cadenceVersions, new Date())
-      if (!cadence) return false
-      const target = t.taskType === 'duration' ? (cadence.targetMinutes ?? 0) : (cadence.targetCount ?? 0)
-      const logs = periodLogs.filter((l) => l.memberId === m.id && l.taskId === t.id)
-      const achieved = t.taskType === 'duration'
-        ? logs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0)
-        : logs.filter((l) => l.completed).length
-      return achieved >= target && target > 0
-    }).length
-    const mPrev = mTasks.filter((t) => {
-      const cadence = getActiveCadence(t.cadenceVersions, new Date())
-      if (!cadence) return false
-      const target = t.taskType === 'duration' ? (cadence.targetMinutes ?? 0) : (cadence.targetCount ?? 0)
-      const logs = prevPeriodLogs.filter((l) => l.memberId === m.id && l.taskId === t.id)
-      const achieved = t.taskType === 'duration'
-        ? logs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0)
-        : logs.filter((l) => l.completed).length
-      return achieved >= target && target > 0
-    }).length
+    const mCurr = mTasks.filter((t) => taskCounts(periodLogs.filter((l) => l.memberId === m.id), t)).length
+    const mPrev = mTasks.filter((t) => taskCounts(prevPeriodLogs.filter((l) => l.memberId === m.id), t)).length
     return { member: m, tasks: mTasks.length, curr: mCurr, prev: mPrev }
   })
 
@@ -399,6 +385,25 @@ export default function StatisticsPage() {
         {/* ── SUMMARY TAB ── */}
         {tab === 'summary' && (
           <>
+            {/* Metric toggle */}
+            <div className="flex gap-1 p-0.5 bg-gray-100 rounded-xl">
+              <button onClick={() => setMetric('completion')}
+                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+                  metric === 'completion' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'
+                }`}>
+                ✓ השלמת משימה
+              </button>
+              <button onClick={() => setMetric('execution')}
+                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+                  metric === 'execution' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'
+                }`}>
+                ◑ ביצוע (לפחות פעם)
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 -mt-3 text-center">
+              {metric === 'completion' ? 'סופרים משימות שהגיעו ל-100% מהיעד' : 'סופרים משימות שבוצעו לפחות פעם אחת'}
+            </p>
+
             {/* Overview cards */}
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-2xl p-3 text-center bg-teal-50 text-teal-700">
