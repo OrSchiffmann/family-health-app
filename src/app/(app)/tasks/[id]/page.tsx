@@ -83,6 +83,12 @@ export default function TaskDetailPage() {
     setLoading(false)
   }
 
+  async function toggleArchive() {
+    if (!task) return
+    await supabase.from('tasks').update({ is_archived: !task.isArchived }).eq('id', id)
+    router.back()
+  }
+
   async function loadLogs() {
     const { data: logsData } = await supabase
       .from('log_entries')
@@ -173,6 +179,10 @@ export default function TaskDetailPage() {
               <p className="text-xs text-gray-400">{task.subcategory.name}</p>
             )}
           </div>
+          <button onClick={toggleArchive}
+            className={`text-sm font-medium ${task.isArchived ? 'text-teal-600' : 'text-gray-400'}`}>
+            {task.isArchived ? 'הוצא מארכיון' : 'ארכיון'}
+          </button>
           <Link href={`/tasks/${id}/edit`} className="text-teal-600 text-sm font-medium">ערוך</Link>
         </div>
 

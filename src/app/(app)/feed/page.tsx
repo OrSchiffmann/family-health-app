@@ -119,8 +119,18 @@ export default function FeedPage() {
       }
     })
 
+    // Auto-archive tasks whose end date has passed
+    const today = new Date().toISOString().split('T')[0]
+    const expiredIds = enriched
+      .filter((t) => t.endDate && t.endDate < today && !t.isArchived)
+      .map((t) => t.id)
+    if (expiredIds.length > 0) {
+      await supabase.from('tasks').update({ is_archived: true }).in('id', expiredIds)
+      enriched.forEach((t) => { if (expiredIds.includes(t.id)) t.isArchived = true })
+    }
+
     setCategories(cats)
-    setTasks(enriched)
+    setTasks(enriched.filter((t) => !t.isArchived || filters.showArchived))
 
     const taskIds = enriched.map((t) => t.id)
     if (taskIds.length > 0) {

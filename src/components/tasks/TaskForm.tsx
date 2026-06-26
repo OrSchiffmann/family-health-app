@@ -193,6 +193,14 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
     router.push(`/tasks/${savedTaskId}`)
   }
 
+  async function handleArchive() {
+    if (!taskId) return
+    setSaving(true)
+    await supabase.from('tasks').update({ is_archived: true }).eq('id', taskId)
+    setSaving(false)
+    router.push('/feed')
+  }
+
   const attachmentTypeLabel: Record<AttachmentType, string> = {
     youtube: 'YouTube',
     image: 'תמונה',
@@ -491,13 +499,24 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
             הבא
           </button>
         ) : (
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="w-full rounded-2xl bg-green-600 text-white py-4 font-bold text-base disabled:opacity-50 active:scale-95 transition-all"
-          >
-            {saving ? 'שומר...' : taskId ? 'שמור שינויים' : 'צור משימה'}
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="w-full rounded-2xl bg-green-600 text-white py-4 font-bold text-base disabled:opacity-50 active:scale-95 transition-all"
+            >
+              {saving ? 'שומר...' : taskId ? 'שמור שינויים' : 'צור משימה'}
+            </button>
+            {taskId && (
+              <button
+                onClick={handleArchive}
+                disabled={saving}
+                className="w-full rounded-2xl border border-gray-200 text-gray-500 py-3 text-sm font-medium active:scale-95 transition-all"
+              >
+                העבר לארכיון
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
