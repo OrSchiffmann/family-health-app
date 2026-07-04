@@ -31,6 +31,8 @@ export default function FeedPage() {
   const [firstDayOfWeek, setFirstDayOfWeek] = useState<0 | 1 | 6>(0)
   const [toast, setToast] = useState<{ message: string; variant: 'success' | 'celebrate' } | null>(null)
   const [confetti, setConfetti] = useState(false)
+  const [dailyExercise, setDailyExercise] = useState<{ name: string; nameEn: string | null; description: string | null; emoji: string } | null>(null)
+  const [dailyDismissed, setDailyDismissed] = useState(false)
   const preLogProgressRef = useRef<CadenceProgress | null>(null)
 
   const [filters, setFilters] = useState<FeedFilters>({
@@ -167,6 +169,36 @@ export default function FeedPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  // Exercise of the day — deterministic daily pick from the library
+  useEffect(() => {
+    const todayKey = new Date().toDateString()
+    if (localStorage.getItem('daily_exercise_dismissed') === todayKey) {
+      setDailyDismissed(true)
+      return
+    }
+    ;(async () => {
+      const { data } = await supabase
+        .from('exercise_library')
+        .select('name, name_en, description, exercise_library_categories(emoji)')
+        .eq('is_active', true)
+      if (!data || data.length === 0) return
+      const start = new Date(new Date().getFullYear(), 0, 0)
+      const dayOfYear = Math.floor((Date.now() - start.getTime()) / 86400000)
+      const pick: any = data[dayOfYear % data.length]
+      setDailyExercise({
+        name: pick.name,
+        nameEn: pick.name_en,
+        description: pick.description,
+        emoji: pick.exercise_library_categories?.emoji ?? '💡',
+      })
+    })()
+  }, [])
+
+  function dismissDaily() {
+    localStorage.setItem('daily_exercise_dismissed', new Date().toDateString())
+    setDailyDismissed(true)
+  }
+
   function getStatusScore(task: TaskWithDetails): 0 | 1 | 2 {
     const p = getProgress(task)
     if (p.target === 0) return 0
@@ -297,6 +329,29 @@ export default function FeedPage() {
                 <span className="absolute inset-0 flex items-center justify-center text-xs font-bold">
                   {Math.round((summary.done / summary.total) * 100)}%
                 </span>
+              </div>
+            </div>
+          </div>
+        )}
+        {dailyExercise && !dailyDismissed && (
+          <div className="bg-white rounded-3xl shadow-sm px-5 py-4 border-2 border-dashed" style={{ borderColor: '#99F6E4' }}>
+            <div className="flex items-start gap-3">
+              <span className="text-2xl shrink-0">{dailyExercise.emoji}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-bold text-teal-600 uppercase tracking-wide">💡 תרגיל היום</p>
+                <p className="font-bold text-gray-900 text-sm mt-0.5">
+                  {dailyExercise.name}
+                  {dailyExercise.nameEn && <span className="text-xs text-gray-400 font-normal mr-1">· {dailyExercise.nameEn}</span>}
+                </p>
+                {dailyExercise.description && (
+                  <p className="text-xs text-gray-500 mt-1 line-clamp-2" dir="ltr" style={{ textAlign: 'left' }}>{dailyExercise.description}</p>
+                )}
+                <div className="flex gap-3 mt-2">
+                  <button onClick={() => router.push('/questionnaire')} className="text-xs font-bold text-teal-600">
+                    הוסיפו דרך השאלון ←
+                  </button>
+                  <button onClick={dismissDaily} className="text-xs text-gray-400">הסתר להיום</button>
+                </div>
               </div>
             </div>
           </div>

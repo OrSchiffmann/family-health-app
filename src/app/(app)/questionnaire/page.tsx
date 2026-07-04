@@ -7,11 +7,13 @@ import type { Member } from '@/types'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
+type ExerciseTarget = 'toddler' | 'child' | 'adult'
+
 interface ExerciseCategory {
   id: string
   name: string
   nameEn: string | null
-  target: 'toddler' | 'adult'
+  target: ExerciseTarget
   bodyArea: string | null
   color: string
   emoji: string
@@ -25,7 +27,7 @@ interface Exercise {
   nameEn: string | null
   description: string | null
   instructions: string | null
-  target: 'toddler' | 'adult'
+  target: ExerciseTarget
   ageMinMonths: number | null
   ageMaxMonths: number | null
   bodyArea: string | null
@@ -46,10 +48,11 @@ interface CadenceConfig {
 type Step = 'member' | 'type' | 'exercises' | 'configure' | 'done'
 
 const BODY_AREAS = [
-  { key: 'neck',         label: 'צוואר',    emoji: '🦴' },
-  { key: 'pelvic_floor', label: 'רצפת אגן', emoji: '⚕️' },
-  { key: 'back',         label: 'גב',        emoji: '🔙' },
-  { key: 'knee',         label: 'ברכיים',   emoji: '🦵' },
+  { key: 'neck',         label: 'צוואר',          emoji: '🦴' },
+  { key: 'pelvic_floor', label: 'רצפת אגן',       emoji: '⚕️' },
+  { key: 'back',         label: 'גב',              emoji: '🔙' },
+  { key: 'knee',         label: 'ברכיים',         emoji: '🦵' },
+  { key: 'relaxation',   label: 'נשימה והרפיה',  emoji: '🧘' },
 ]
 
 const DIFFICULTY_LABEL: Record<string, string> = {
@@ -69,7 +72,7 @@ export default function QuestionnairePage() {
   const [familyId, setFamilyId]                   = useState('')
   const [userId, setUserId]                       = useState('')
   const [selectedMember, setSelectedMember]       = useState<Member | null>(null)
-  const [targetType, setTargetType]               = useState<'toddler' | 'adult' | null>(null)
+  const [targetType, setTargetType]               = useState<ExerciseTarget | null>(null)
   const [ageMonths, setAgeMonths]                 = useState(12)
   const [selectedBodyAreas, setSelectedBodyAreas] = useState<string[]>([])
   const [exercises, setExercises]                 = useState<Exercise[]>([])
@@ -127,7 +130,7 @@ export default function QuestionnairePage() {
   }
 
   const loadExercises = useCallback(async (
-    target: 'toddler' | 'adult',
+    target: ExerciseTarget,
     ageM: number,
     bodyAreas: string[],
   ) => {
@@ -141,7 +144,7 @@ export default function QuestionnairePage() {
 
     let exQuery = supabase
       .from('exercise_library').select('*').eq('target', target).eq('is_active', true).order('sort_order')
-    if (target === 'toddler') exQuery = exQuery.lte('age_min_months', ageM).gte('age_max_months', ageM)
+    if (target !== 'adult') exQuery = exQuery.lte('age_min_months', ageM).gte('age_max_months', ageM)
     else if (bodyAreas.length > 0) exQuery = exQuery.in('body_area', bodyAreas)
     const { data: exData } = await exQuery
 
@@ -166,17 +169,24 @@ export default function QuestionnairePage() {
         setStep('exercises')
         return
       }
+      if (months > 42 && months <= 72) {
+        setTargetType('child')
+        setAgeMonths(months)
+        await loadExercises('child', months, [])
+        setStep('exercises')
+        return
+      }
     }
     setStep('type')
   }
 
   async function handleTypeConfirm() {
     if (!targetType) return
-    if (targetType === 'toddler') {
-      await loadExercises('toddler', ageMonths, [])
-    } else {
+    if (targetType === 'adult') {
       if (selectedBodyAreas.length === 0) return
       await loadExercises('adult', 0, selectedBodyAreas)
+    } else {
+      await loadExercises(targetType, ageMonths, [])
     }
     setStep('exercises')
   }
@@ -374,14 +384,22 @@ export default function QuestionnairePage() {
         {step === 'type' && selectedMember && (
           <>
             <p className="text-sm text-gray-500">תרגילים עבור <strong>{selectedMember.name}</strong></p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               {[
-                { key: 'toddler', emoji: '👶', label: 'פעוט', sub: 'עד גיל 3' },
+                { key: 'toddler', emoji: '👶', label: 'פעוט',  sub: 'עד גיל 3' },
+                { key: 'child',   emoji: '🧒', label: 'ילד/ה', sub: 'גיל 3–6' },
                 { key: 'adult',   emoji: '🧑', label: 'מבוגר', sub: 'פיזיותרפיה' },
               ].map(opt => (
                 <button key={opt.key}
-                  onClick={() => { setTargetType(opt.key as 'toddler' | 'adult'); if (opt.key === 'adult') { setAgeMonths(0) } else { setSelectedBodyAreas([]) } }}
-                  className="p-4 rounded-2xl border-2 text-center transition-all"
+                  onClick={() => {
+                    setTargetType(opt.key as ExerciseTarget)
+                    if (opt.key === 'adult') { setAgeMonths(0) }
+                    else {
+                      setSelectedBodyAreas([])
+                      setAgeMonths(opt.key === 'toddler' ? 12 : 48)
+                    }
+                  }}
+                  className="p-3 rounded-2xl border-2 text-center transition-all"
                   style={{ background: targetType === opt.key ? '#E0FAF8' : 'white', borderColor: targetType === opt.key ? '#0AB5B5' : '#E5E7EB' }}>
                   <div className="text-3xl mb-1">{opt.emoji}</div>
                   <div className="font-semibold text-gray-800 text-sm">{opt.label}</div>
@@ -390,26 +408,32 @@ export default function QuestionnairePage() {
               ))}
             </div>
 
-            {targetType === 'toddler' && (
-              <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
-                <p className="font-semibold text-gray-700 text-sm">גיל (בחודשים)</p>
-                <div className="flex items-center gap-3">
-                  <button onClick={() => setAgeMonths(a => Math.max(0, a - 1))}
-                    className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-600">−</button>
-                  <div className="flex-1 text-center">
-                    <span className="text-2xl font-bold text-teal-600">{ageMonths}</span>
-                    <span className="text-sm text-gray-400 mr-1">חודשים</span>
-                    <div className="text-xs text-gray-400">({Math.floor(ageMonths / 12)} שנים{ageMonths % 12 > 0 ? ` ו-${ageMonths % 12} חודשים` : ''})</div>
+            {(targetType === 'toddler' || targetType === 'child') && (() => {
+              const min = targetType === 'toddler' ? 0 : 36
+              const max = targetType === 'toddler' ? 36 : 72
+              return (
+                <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
+                  <p className="font-semibold text-gray-700 text-sm">גיל (בחודשים)</p>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setAgeMonths(a => Math.max(min, a - 1))}
+                      className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-600">−</button>
+                    <div className="flex-1 text-center">
+                      <span className="text-2xl font-bold text-teal-600">{ageMonths}</span>
+                      <span className="text-sm text-gray-400 mr-1">חודשים</span>
+                      <div className="text-xs text-gray-400">({Math.floor(ageMonths / 12)} שנים{ageMonths % 12 > 0 ? ` ו-${ageMonths % 12} חודשים` : ''})</div>
+                    </div>
+                    <button onClick={() => setAgeMonths(a => Math.min(max, a + 1))}
+                      className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-600">+</button>
                   </div>
-                  <button onClick={() => setAgeMonths(a => Math.min(36, a + 1))}
-                    className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-600">+</button>
+                  <input type="range" min={min} max={max} value={ageMonths} onChange={e => setAgeMonths(Number(e.target.value))} className="w-full accent-teal-500" />
+                  <div className="flex justify-between text-xs text-gray-300">
+                    {targetType === 'toddler'
+                      ? ['לידה','6','12','18','24','30','36'].map(l => <span key={l}>{l}</span>)
+                      : ['3','3.5','4','4.5','5','5.5','6'].map(l => <span key={l}>{l}</span>)}
+                  </div>
                 </div>
-                <input type="range" min={0} max={36} value={ageMonths} onChange={e => setAgeMonths(Number(e.target.value))} className="w-full accent-teal-500" />
-                <div className="flex justify-between text-xs text-gray-300">
-                  {['לידה','6','12','18','24','30','36'].map(l => <span key={l}>{l}</span>)}
-                </div>
-              </div>
-            )}
+              )
+            })()}
 
             {targetType === 'adult' && (
               <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
