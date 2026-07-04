@@ -27,6 +27,7 @@ export default function ExecutionModal({ taskId, memberId, members, onClose, onS
   const [manualMinutes, setManualMinutes] = useState('')
   const [timerSeconds, setTimerSeconds] = useState(0)
   const [timerRunning, setTimerRunning] = useState(false)
+  const [execCount, setExecCount] = useState(1)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -121,17 +122,22 @@ export default function ExecutionModal({ taskId, memberId, members, onClose, onS
     if (!cadence) { setSaving(false); return }
 
     const useTimerSeconds = task.taskType === 'duration' && timerMode && timerSeconds > 0
-    const { error: saveErr } = await supabase.rpc('log_execution', {
-      p_task_id: taskId,
-      p_member_id: selectedMemberId,
-      p_cadence_version_id: cadence.id,
-      p_completed: task.taskType === 'done_not_done' ? completed : true,
-      p_duration_minutes: task.taskType === 'duration' && !useTimerSeconds ? parseInt(manualMinutes || '0', 10) : null,
-      p_duration_seconds: useTimerSeconds ? timerSeconds : null,
-      p_notes: notes || null,
-      p_execution_time: executionTime || new Date().toISOString(),
-      p_tag_ids: selectedTags,
-    })
+    const times = cadence.timesPerDay ? execCount : 1
+    let saveErr = null
+    for (let i = 0; i < times; i++) {
+      const { error: err } = await supabase.rpc('log_execution', {
+        p_task_id: taskId,
+        p_member_id: selectedMemberId,
+        p_cadence_version_id: cadence.id,
+        p_completed: task.taskType === 'done_not_done' ? completed : true,
+        p_duration_minutes: task.taskType === 'duration' && !useTimerSeconds ? parseInt(manualMinutes || '0', 10) : null,
+        p_duration_seconds: useTimerSeconds ? timerSeconds : null,
+        p_notes: notes || null,
+        p_execution_time: executionTime || new Date().toISOString(),
+        p_tag_ids: selectedTags,
+      })
+      if (err) { saveErr = err; break }
+    }
 
     setSaving(false)
     if (saveErr) {
@@ -190,6 +196,25 @@ export default function ExecutionModal({ taskId, memberId, members, onClose, onS
             />
             <span className="font-medium text-gray-800">בוצע</span>
           </label>
+        )}
+
+        {/* Repetition count — shown when task has timesPerDay compound cadence */}
+        {task?.taskType === 'done_not_done' && cadence?.timesPerDay && (
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-2 block">
+              כמה פעמים בוצע?
+              <span className="text-xs text-gray-400 mr-1">(יעד: {cadence.timesPerDay} פעמים)</span>
+            </label>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setExecCount(c => Math.max(1, c - 1))}
+                className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-xl font-bold text-gray-600">−</button>
+              <span className="text-3xl font-bold text-teal-600 flex-1 text-center">{execCount}</span>
+              <button
+                onClick={() => setExecCount(c => Math.min(cadence.timesPerDay!, c + 1))}
+                className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-xl font-bold text-gray-600">+</button>
+            </div>
+          </div>
         )}
 
         {/* Duration */}
