@@ -56,7 +56,7 @@ export function computeProgress(
       const mins = l.durationSeconds != null ? l.durationSeconds / 60 : (l.durationMinutes ?? 0)
       return sum + mins
     }, 0))
-  } else if (cadence.timesPerDay && cadence.per !== 'day') {
+  } else if (cadence.timesPerDay) {
     // Compound cadence: count days where completions >= timesPerDay
     const byDay: Record<string, number> = {}
     for (const l of relevantLogs.filter((l) => l.completed)) {
