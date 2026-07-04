@@ -37,47 +37,49 @@ interface Exercise {
   category?: ExerciseCategory
 }
 
-type Step = 'member' | 'type' | 'exercises' | 'done'
+interface CadenceConfig {
+  count: number
+  per: 'day' | 'week'
+}
+
+type Step = 'member' | 'type' | 'exercises' | 'configure' | 'done'
 
 const BODY_AREAS = [
-  { key: 'neck',         label: 'צוואר',        emoji: '🦴' },
-  { key: 'pelvic_floor', label: 'רצפת אגן',     emoji: '⚕️' },
-  { key: 'back',         label: 'גב',            emoji: '🔙' },
-  { key: 'knee',         label: 'ברכיים',        emoji: '🦵' },
+  { key: 'neck',         label: 'צוואר',    emoji: '🦴' },
+  { key: 'pelvic_floor', label: 'רצפת אגן', emoji: '⚕️' },
+  { key: 'back',         label: 'גב',        emoji: '🔙' },
+  { key: 'knee',         label: 'ברכיים',   emoji: '🦵' },
 ]
 
 const DIFFICULTY_LABEL: Record<string, string> = {
   easy: 'קל', medium: 'בינוני', hard: 'מאתגר',
 }
 
-const FREQ_LABEL = (count: number, per: string) => {
-  const perHe = per === 'day' ? 'ביום' : 'בשבוע'
-  return `${count}× ${perHe}`
-}
+const STEPS: Step[] = ['member', 'type', 'exercises', 'configure']
 
 // ── Component ──────────────────────────────────────────────────────────────
 
 export default function QuestionnairePage() {
-  const router = useRouter()
+  const router  = useRouter()
   const supabase = createClient()
 
-  const [step, setStep]                       = useState<Step>('member')
-  const [members, setMembers]                 = useState<Member[]>([])
-  const [familyId, setFamilyId]               = useState('')
-  const [userId, setUserId]                   = useState('')
-  const [selectedMember, setSelectedMember]   = useState<Member | null>(null)
-  const [targetType, setTargetType]           = useState<'toddler' | 'adult' | null>(null)
-  const [ageMonths, setAgeMonths]             = useState(12)
+  const [step, setStep]                           = useState<Step>('member')
+  const [members, setMembers]                     = useState<Member[]>([])
+  const [familyId, setFamilyId]                   = useState('')
+  const [userId, setUserId]                       = useState('')
+  const [selectedMember, setSelectedMember]       = useState<Member | null>(null)
+  const [targetType, setTargetType]               = useState<'toddler' | 'adult' | null>(null)
+  const [ageMonths, setAgeMonths]                 = useState(12)
   const [selectedBodyAreas, setSelectedBodyAreas] = useState<string[]>([])
-  const [exercises, setExercises]             = useState<Exercise[]>([])
-  const [categories, setCategories]           = useState<ExerciseCategory[]>([])
-  const [selectedIds, setSelectedIds]         = useState<Set<string>>(new Set())
-  const [expanded, setExpanded]               = useState<string | null>(null)
-  const [loadingEx, setLoadingEx]             = useState(false)
-  const [saving, setSaving]                   = useState(false)
-  const [addedCount, setAddedCount]           = useState(0)
+  const [exercises, setExercises]                 = useState<Exercise[]>([])
+  const [categories, setCategories]               = useState<ExerciseCategory[]>([])
+  const [selectedIds, setSelectedIds]             = useState<Set<string>>(new Set())
+  const [cadenceMap, setCadenceMap]               = useState<Record<string, CadenceConfig>>({})
+  const [expanded, setExpanded]                   = useState<string | null>(null)
+  const [loadingEx, setLoadingEx]                 = useState(false)
+  const [saving, setSaving]                       = useState(false)
+  const [addedCount, setAddedCount]               = useState(0)
 
-  // Load members on mount
   useEffect(() => {
     ;(async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -96,7 +98,7 @@ export default function QuestionnairePage() {
     })()
   }, [])
 
-  // ── Helpers ──
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
   function mapCategory(c: any): ExerciseCategory {
     return {
@@ -131,26 +133,14 @@ export default function QuestionnairePage() {
     setSelectedIds(new Set())
 
     let catQuery = supabase
-      .from('exercise_library_categories')
-      .select('*')
-      .eq('target', target)
-      .order('sort_order')
-    if (target === 'adult' && bodyAreas.length > 0) {
-      catQuery = catQuery.in('body_area', bodyAreas)
-    }
+      .from('exercise_library_categories').select('*').eq('target', target).order('sort_order')
+    if (target === 'adult' && bodyAreas.length > 0) catQuery = catQuery.in('body_area', bodyAreas)
     const { data: catsData } = await catQuery
 
     let exQuery = supabase
-      .from('exercise_library')
-      .select('*')
-      .eq('target', target)
-      .eq('is_active', true)
-      .order('sort_order')
-    if (target === 'toddler') {
-      exQuery = exQuery.lte('age_min_months', ageM).gte('age_max_months', ageM)
-    } else if (bodyAreas.length > 0) {
-      exQuery = exQuery.in('body_area', bodyAreas)
-    }
+      .from('exercise_library').select('*').eq('target', target).eq('is_active', true).order('sort_order')
+    if (target === 'toddler') exQuery = exQuery.lte('age_min_months', ageM).gte('age_max_months', ageM)
+    else if (bodyAreas.length > 0) exQuery = exQuery.in('body_area', bodyAreas)
     const { data: exData } = await exQuery
 
     const catsMap = new Map((catsData ?? []).map((c: any) => [c.id, mapCategory(c)]))
@@ -159,16 +149,14 @@ export default function QuestionnairePage() {
     setLoadingEx(false)
   }, [supabase])
 
-  // ── Step navigation ──
+  // ── Navigation ─────────────────────────────────────────────────────────────
 
   async function handleSelectMember(member: Member) {
     setSelectedMember(member)
-    // Try to auto-detect toddler from birth_date
     const { data } = await supabase.from('members').select('birth_date').eq('id', member.id).single()
     if (data?.birth_date) {
-      const birthDate = new Date(data.birth_date)
-      const months = (new Date().getFullYear() - birthDate.getFullYear()) * 12
-                   + (new Date().getMonth() - birthDate.getMonth())
+      const months = (new Date().getFullYear() - new Date(data.birth_date).getFullYear()) * 12
+                   + (new Date().getMonth() - new Date(data.birth_date).getMonth())
       if (months >= 0 && months <= 42) {
         setTargetType('toddler')
         setAgeMonths(months)
@@ -184,38 +172,44 @@ export default function QuestionnairePage() {
     if (!targetType) return
     if (targetType === 'toddler') {
       await loadExercises('toddler', ageMonths, [])
-      setStep('exercises')
     } else {
-      // adult — need area selection
       if (selectedBodyAreas.length === 0) return
       await loadExercises('adult', 0, selectedBodyAreas)
-      setStep('exercises')
     }
+    setStep('exercises')
   }
 
-  function toggleArea(key: string) {
-    setSelectedBodyAreas(prev =>
-      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-    )
-  }
-
-  function toggleExercise(id: string) {
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
+  function handleProceedToConfigure() {
+    if (selectedIds.size === 0) return
+    // Pre-fill cadence with suggested values
+    const initial: Record<string, CadenceConfig> = {}
+    exercises.filter(e => selectedIds.has(e.id)).forEach(e => {
+      initial[e.id] = { count: e.suggestedFrequencyCount, per: e.suggestedFrequencyPer }
     })
+    setCadenceMap(initial)
+    setStep('configure')
   }
 
-  // ── Add tasks ──
+  function goBack() {
+    if (step === 'configure') { setStep('exercises'); return }
+    if (step === 'exercises') { setStep('type'); return }
+    if (step === 'type')      { setStep('member'); return }
+    router.back()
+  }
+
+  // ── Cadence helpers ────────────────────────────────────────────────────────
+
+  function updateCadence(id: string, patch: Partial<CadenceConfig>) {
+    setCadenceMap(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }))
+  }
+
+  // ── Add tasks ──────────────────────────────────────────────────────────────
 
   async function handleAddTasks() {
     if (!selectedMember || !familyId || selectedIds.size === 0) return
     setSaving(true)
 
     const selectedExercises = exercises.filter(e => selectedIds.has(e.id))
-
-    // Cache category id per exercise category name to avoid duplicate inserts
     const catCache = new Map<string, string>()
 
     for (const exercise of selectedExercises) {
@@ -227,11 +221,8 @@ export default function QuestionnairePage() {
         categoryId = catCache.get(catName)!
       } else {
         const { data: existing } = await supabase
-          .from('categories')
-          .select('id')
-          .eq('family_id', familyId)
-          .eq('member_id', selectedMember.id)
-          .eq('name', catName)
+          .from('categories').select('id')
+          .eq('family_id', familyId).eq('member_id', selectedMember.id).eq('name', catName)
           .maybeSingle()
 
         if (existing) {
@@ -239,28 +230,22 @@ export default function QuestionnairePage() {
         } else {
           const { data: created } = await supabase
             .from('categories')
-            .insert({
-              family_id: familyId,
-              member_id: selectedMember.id,
-              name: catName,
-              color: catColor,
-              is_default: false,
-              sort_order: 99,
-            })
-            .select('id')
-            .single()
+            .insert({ family_id: familyId, member_id: selectedMember.id, name: catName, color: catColor, is_default: false, sort_order: 99 })
+            .select('id').single()
           categoryId = created!.id
         }
         catCache.set(catName, categoryId)
       }
 
+      const cadence  = cadenceMap[exercise.id] ?? { count: exercise.suggestedFrequencyCount, per: exercise.suggestedFrequencyPer }
       const taskType = exercise.suggestedDurationMinutes ? 'duration' : 'done_not_done'
+
       const descParts: string[] = []
       if (exercise.nameEn) descParts.push(exercise.nameEn)
       if (exercise.description) descParts.push(exercise.description)
       if (exercise.youtubeSearchQuery) {
-        const encoded = encodeURIComponent(exercise.youtubeSearchQuery)
-        descParts.push(`🎬 YouTube: https://www.youtube.com/results?search_query=${encoded}`)
+        const q = encodeURIComponent(exercise.youtubeSearchQuery)
+        descParts.push(`🎬 YouTube: https://www.youtube.com/results?search_query=${q}`)
       }
 
       const { data: task } = await supabase
@@ -274,16 +259,15 @@ export default function QuestionnairePage() {
           task_type: taskType,
           created_by: userId,
         })
-        .select('id')
-        .single()
+        .select('id').single()
 
       if (task) {
         await supabase.from('cadence_versions').insert({
           task_id: task.id,
           effective_from: new Date().toISOString().split('T')[0],
-          target_count: taskType !== 'duration' ? exercise.suggestedFrequencyCount : null,
+          target_count: taskType !== 'duration' ? cadence.count : null,
           target_minutes: taskType === 'duration' ? exercise.suggestedDurationMinutes : null,
-          per: exercise.suggestedFrequencyPer,
+          per: cadence.per,
         })
       }
     }
@@ -293,43 +277,29 @@ export default function QuestionnairePage() {
     setStep('done')
   }
 
-  // ── Derived ──
+  // ── Derived ────────────────────────────────────────────────────────────────
 
-  const groupedExercises = categories.map(cat => ({
-    category: cat,
-    exercises: exercises.filter(e => e.categoryId === cat.id),
-  })).filter(g => g.exercises.length > 0)
+  const groupedExercises = categories
+    .map(cat => ({ category: cat, exercises: exercises.filter(e => e.categoryId === cat.id) }))
+    .filter(g => g.exercises.length > 0)
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  const selectedExercises = exercises.filter(e => selectedIds.has(e.id))
 
-  // ── Step: Done ──
+  const stepIndex = STEPS.indexOf(step)
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   if (step === 'done') {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center gap-6">
-        <div className="h-20 w-20 rounded-full flex items-center justify-center text-4xl"
-             style={{ background: '#E0FAF8' }}>
-          ✅
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center gap-6" dir="rtl">
+        <div className="h-20 w-20 rounded-full flex items-center justify-center text-4xl" style={{ background: '#E0FAF8' }}>✅</div>
         <div>
           <h2 className="text-xl font-bold text-gray-900">נוסף בהצלחה!</h2>
-          <p className="text-gray-500 mt-1">
-            {addedCount} {addedCount === 1 ? 'תרגיל נוסף' : 'תרגילים נוספו'} ל{selectedMember?.name}
-          </p>
+          <p className="text-gray-500 mt-1">{addedCount} {addedCount === 1 ? 'תרגיל נוסף' : 'תרגילים נוספו'} ל{selectedMember?.name}</p>
         </div>
         <div className="flex gap-3 w-full max-w-xs">
-          <button
-            onClick={() => router.push('/feed')}
-            className="flex-1 py-3 rounded-2xl font-semibold text-white"
-            style={{ background: 'linear-gradient(135deg,#0AB5B5,#06B6D4)' }}
-          >
-            לפיד
-          </button>
-          <button
-            onClick={() => { setStep('member'); setSelectedMember(null); setTargetType(null); setSelectedBodyAreas([]); setSelectedIds(new Set()) }}
-            className="flex-1 py-3 rounded-2xl font-semibold text-teal-700 bg-teal-50"
-          >
-            שאלון נוסף
-          </button>
+          <button onClick={() => router.push('/feed')} className="flex-1 py-3 rounded-2xl font-semibold text-white" style={{ background: 'linear-gradient(135deg,#0AB5B5,#06B6D4)' }}>לפיד</button>
+          <button onClick={() => { setStep('member'); setSelectedMember(null); setTargetType(null); setSelectedBodyAreas([]); setSelectedIds(new Set()) }} className="flex-1 py-3 rounded-2xl font-semibold text-teal-700 bg-teal-50">שאלון נוסף</button>
         </div>
       </div>
     )
@@ -340,14 +310,7 @@ export default function QuestionnairePage() {
       {/* Header */}
       <div className="sticky top-0 z-10 bg-[#F0FAFA] px-4 pt-5 pb-3">
         <div className="flex items-center gap-3 mb-4">
-          <button
-            onClick={() => {
-              if (step === 'exercises') setStep(targetType === 'toddler' && categories.length > 0 ? 'type' : 'type')
-              else if (step === 'type') setStep('member')
-              else router.back()
-            }}
-            className="h-9 w-9 flex items-center justify-center rounded-full bg-white shadow-sm text-gray-500"
-          >
+          <button onClick={goBack} className="h-9 w-9 flex items-center justify-center rounded-full bg-white shadow-sm text-gray-500">
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
@@ -355,22 +318,18 @@ export default function QuestionnairePage() {
           <div>
             <h1 className="text-lg font-bold text-gray-900">שאלון תרגילים</h1>
             <p className="text-xs text-gray-400">
-              {step === 'member' ? 'עבור מי?' : step === 'type' ? 'סוג תרגיל' : `${exercises.length} תרגילים זמינים`}
+              {step === 'member'    ? 'עבור מי?' :
+               step === 'type'     ? 'סוג תרגיל' :
+               step === 'exercises'? `${exercises.length} תרגילים זמינים` :
+                                     `הגדרת תדירות — ${selectedExercises.length} תרגילים`}
             </p>
           </div>
         </div>
-
-        {/* Step indicator */}
+        {/* Progress bar */}
         <div className="flex gap-1.5">
-          {(['member', 'type', 'exercises'] as Step[]).map((s, i) => (
-            <div
-              key={s}
-              className="h-1 rounded-full flex-1 transition-all"
-              style={{
-                background: step === s ? '#0AB5B5' : i < ['member','type','exercises'].indexOf(step) ? '#0AB5B5' : '#E5E7EB',
-                opacity: step === s ? 1 : i < ['member','type','exercises'].indexOf(step) ? 0.5 : 0.3,
-              }}
-            />
+          {STEPS.map((s, i) => (
+            <div key={s} className="h-1 rounded-full flex-1 transition-all"
+              style={{ background: i <= stepIndex ? '#0AB5B5' : '#E5E7EB', opacity: i === stepIndex ? 1 : i < stepIndex ? 0.5 : 0.3 }} />
           ))}
         </div>
       </div>
@@ -380,18 +339,13 @@ export default function QuestionnairePage() {
         {/* ── Step: member ── */}
         {step === 'member' && (
           <>
-            <p className="text-sm text-gray-500 mb-2">בחרי חבר/ת משפחה</p>
+            <p className="text-sm text-gray-500">בחרי חבר/ת משפחה</p>
             <div className="grid grid-cols-2 gap-3">
               {members.map(m => (
-                <button
-                  key={m.id}
-                  onClick={() => handleSelectMember(m)}
-                  className="flex items-center gap-3 p-4 rounded-2xl bg-white shadow-sm active:scale-95 transition-transform text-right"
-                >
+                <button key={m.id} onClick={() => handleSelectMember(m)}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-white shadow-sm active:scale-95 transition-transform text-right">
                   <div className="h-10 w-10 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0"
-                       style={{ background: m.avatarColor }}>
-                    {m.name.charAt(0)}
-                  </div>
+                    style={{ background: m.avatarColor }}>{m.name.charAt(0)}</div>
                   <span className="font-semibold text-gray-800 text-sm">{m.name}</span>
                 </button>
               ))}
@@ -402,85 +356,53 @@ export default function QuestionnairePage() {
         {/* ── Step: type ── */}
         {step === 'type' && selectedMember && (
           <>
-            <p className="text-sm text-gray-500">
-              תרגילים עבור <strong>{selectedMember.name}</strong>
-            </p>
-
-            {/* Toddler / Adult cards */}
+            <p className="text-sm text-gray-500">תרגילים עבור <strong>{selectedMember.name}</strong></p>
             <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => { setTargetType('toddler'); setSelectedBodyAreas([]) }}
-                className="p-4 rounded-2xl border-2 text-center transition-all"
-                style={{
-                  background: targetType === 'toddler' ? '#E0FAF8' : 'white',
-                  borderColor: targetType === 'toddler' ? '#0AB5B5' : '#E5E7EB',
-                }}
-              >
-                <div className="text-3xl mb-1">👶</div>
-                <div className="font-semibold text-gray-800 text-sm">פעוט</div>
-                <div className="text-xs text-gray-400">עד גיל 3</div>
-              </button>
-              <button
-                onClick={() => { setTargetType('adult'); setAgeMonths(0) }}
-                className="p-4 rounded-2xl border-2 text-center transition-all"
-                style={{
-                  background: targetType === 'adult' ? '#E0FAF8' : 'white',
-                  borderColor: targetType === 'adult' ? '#0AB5B5' : '#E5E7EB',
-                }}
-              >
-                <div className="text-3xl mb-1">🧑</div>
-                <div className="font-semibold text-gray-800 text-sm">מבוגר</div>
-                <div className="text-xs text-gray-400">פיזיותרפיה</div>
-              </button>
+              {[
+                { key: 'toddler', emoji: '👶', label: 'פעוט', sub: 'עד גיל 3' },
+                { key: 'adult',   emoji: '🧑', label: 'מבוגר', sub: 'פיזיותרפיה' },
+              ].map(opt => (
+                <button key={opt.key}
+                  onClick={() => { setTargetType(opt.key as 'toddler' | 'adult'); if (opt.key === 'adult') { setAgeMonths(0) } else { setSelectedBodyAreas([]) } }}
+                  className="p-4 rounded-2xl border-2 text-center transition-all"
+                  style={{ background: targetType === opt.key ? '#E0FAF8' : 'white', borderColor: targetType === opt.key ? '#0AB5B5' : '#E5E7EB' }}>
+                  <div className="text-3xl mb-1">{opt.emoji}</div>
+                  <div className="font-semibold text-gray-800 text-sm">{opt.label}</div>
+                  <div className="text-xs text-gray-400">{opt.sub}</div>
+                </button>
+              ))}
             </div>
 
-            {/* Toddler age input */}
             {targetType === 'toddler' && (
               <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
                 <p className="font-semibold text-gray-700 text-sm">גיל (בחודשים)</p>
                 <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setAgeMonths(a => Math.max(0, a - 1))}
-                    className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-600"
-                  >−</button>
+                  <button onClick={() => setAgeMonths(a => Math.max(0, a - 1))}
+                    className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-600">−</button>
                   <div className="flex-1 text-center">
                     <span className="text-2xl font-bold text-teal-600">{ageMonths}</span>
                     <span className="text-sm text-gray-400 mr-1">חודשים</span>
-                    <div className="text-xs text-gray-400">
-                      ({Math.floor(ageMonths / 12)} שנים {ageMonths % 12 > 0 ? `ו-${ageMonths % 12} חודשים` : ''})
-                    </div>
+                    <div className="text-xs text-gray-400">({Math.floor(ageMonths / 12)} שנים{ageMonths % 12 > 0 ? ` ו-${ageMonths % 12} חודשים` : ''})</div>
                   </div>
-                  <button
-                    onClick={() => setAgeMonths(a => Math.min(36, a + 1))}
-                    className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-600"
-                  >+</button>
+                  <button onClick={() => setAgeMonths(a => Math.min(36, a + 1))}
+                    className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-600">+</button>
                 </div>
-                <input
-                  type="range" min={0} max={36} value={ageMonths}
-                  onChange={e => setAgeMonths(Number(e.target.value))}
-                  className="w-full accent-teal-500"
-                />
+                <input type="range" min={0} max={36} value={ageMonths} onChange={e => setAgeMonths(Number(e.target.value))} className="w-full accent-teal-500" />
                 <div className="flex justify-between text-xs text-gray-300">
-                  <span>לידה</span><span>6 חו'</span><span>12 חו'</span><span>18 חו'</span><span>24 חו'</span><span>30 חו'</span><span>36 חו'</span>
+                  {['לידה','6','12','18','24','30','36'].map(l => <span key={l}>{l}</span>)}
                 </div>
               </div>
             )}
 
-            {/* Adult body area selection */}
             {targetType === 'adult' && (
               <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
                 <p className="font-semibold text-gray-700 text-sm">בחרי אזורי פיזיותרפיה (ניתן לבחור כמה)</p>
                 <div className="grid grid-cols-2 gap-2">
                   {BODY_AREAS.map(area => (
-                    <button
-                      key={area.key}
-                      onClick={() => toggleArea(area.key)}
-                      className="flex items-center gap-2 p-3 rounded-xl border-2 transition-all text-right"
-                      style={{
-                        background: selectedBodyAreas.includes(area.key) ? '#E0FAF8' : '#F9FAFB',
-                        borderColor: selectedBodyAreas.includes(area.key) ? '#0AB5B5' : '#E5E7EB',
-                      }}
-                    >
+                    <button key={area.key}
+                      onClick={() => setSelectedBodyAreas(prev => prev.includes(area.key) ? prev.filter(k => k !== area.key) : [...prev, area.key])}
+                      className="flex items-center gap-2 p-3 rounded-xl border-2 transition-all"
+                      style={{ background: selectedBodyAreas.includes(area.key) ? '#E0FAF8' : '#F9FAFB', borderColor: selectedBodyAreas.includes(area.key) ? '#0AB5B5' : '#E5E7EB' }}>
                       <span className="text-xl">{area.emoji}</span>
                       <span className="font-semibold text-sm text-gray-700">{area.label}</span>
                     </button>
@@ -489,13 +411,10 @@ export default function QuestionnairePage() {
               </div>
             )}
 
-            {/* Proceed button */}
-            <button
-              onClick={handleTypeConfirm}
+            <button onClick={handleTypeConfirm}
               disabled={!targetType || (targetType === 'adult' && selectedBodyAreas.length === 0)}
               className="w-full py-4 rounded-2xl font-bold text-white text-base disabled:opacity-40"
-              style={{ background: 'linear-gradient(135deg,#0AB5B5,#06B6D4)' }}
-            >
+              style={{ background: 'linear-gradient(135deg,#0AB5B5,#06B6D4)' }}>
               הצגת תרגילים →
             </button>
           </>
@@ -515,42 +434,27 @@ export default function QuestionnairePage() {
               </div>
             ) : (
               <>
-                {/* Select/deselect all */}
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">
-                    {selectedIds.size} נבחרו מתוך {exercises.length}
-                  </span>
-                  <button
-                    onClick={() => {
-                      if (selectedIds.size === exercises.length) setSelectedIds(new Set())
-                      else setSelectedIds(new Set(exercises.map(e => e.id)))
-                    }}
-                    className="text-sm font-semibold text-teal-600"
-                  >
+                  <span className="text-sm text-gray-500">{selectedIds.size} נבחרו מתוך {exercises.length}</span>
+                  <button onClick={() => setSelectedIds(selectedIds.size === exercises.length ? new Set() : new Set(exercises.map(e => e.id)))}
+                    className="text-sm font-semibold text-teal-600">
                     {selectedIds.size === exercises.length ? 'בטל הכל' : 'בחר הכל'}
                   </button>
                 </div>
-
-                {/* Exercise groups */}
                 {groupedExercises.map(({ category, exercises: catExercises }) => (
                   <div key={category.id}>
                     <div className="flex items-center gap-2 mb-2 mt-3">
                       <span className="text-lg">{category.emoji}</span>
                       <h3 className="font-bold text-gray-800">{category.name}</h3>
-                      {category.nameEn && (
-                        <span className="text-xs text-gray-400">{category.nameEn}</span>
-                      )}
+                      {category.nameEn && <span className="text-xs text-gray-400">{category.nameEn}</span>}
                     </div>
                     <div className="space-y-2">
                       {catExercises.map(ex => (
-                        <ExerciseCard
-                          key={ex.id}
-                          exercise={ex}
+                        <ExerciseCard key={ex.id} exercise={ex}
                           selected={selectedIds.has(ex.id)}
                           expanded={expanded === ex.id}
-                          onToggle={() => toggleExercise(ex.id)}
-                          onExpand={() => setExpanded(expanded === ex.id ? null : ex.id)}
-                        />
+                          onToggle={() => setSelectedIds(prev => { const n = new Set(prev); n.has(ex.id) ? n.delete(ex.id) : n.add(ex.id); return n })}
+                          onExpand={() => setExpanded(expanded === ex.id ? null : ex.id)} />
                       ))}
                     </div>
                   </div>
@@ -559,108 +463,151 @@ export default function QuestionnairePage() {
             )}
           </>
         )}
+
+        {/* ── Step: configure ── */}
+        {step === 'configure' && (
+          <>
+            <p className="text-sm text-gray-500">
+              הגדירי כמה פעמים בשבוע/יום לבצע כל תרגיל עבור <strong>{selectedMember?.name}</strong>
+            </p>
+            <div className="space-y-3">
+              {selectedExercises.map(ex => {
+                const cfg = cadenceMap[ex.id] ?? { count: ex.suggestedFrequencyCount, per: ex.suggestedFrequencyPer }
+                return (
+                  <div key={ex.id} className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
+                    {/* Exercise name */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{ex.category?.emoji ?? '📋'}</span>
+                      <div>
+                        <p className="font-semibold text-gray-900 text-sm">{ex.name}</p>
+                        {ex.nameEn && <p className="text-xs text-gray-400">{ex.nameEn}</p>}
+                      </div>
+                    </div>
+
+                    {/* Per: day / week toggle */}
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1.5">תדירות</p>
+                      <div className="flex gap-2">
+                        {(['day', 'week'] as const).map(p => (
+                          <button key={p}
+                            onClick={() => updateCadence(ex.id, { per: p })}
+                            className="flex-1 py-2 rounded-xl text-sm font-semibold border-2 transition-all"
+                            style={{
+                              background: cfg.per === p ? '#E0FAF8' : '#F9FAFB',
+                              borderColor: cfg.per === p ? '#0AB5B5' : '#E5E7EB',
+                              color: cfg.per === p ? '#0D9488' : '#6B7280',
+                            }}>
+                            {p === 'day' ? 'ביום' : 'בשבוע'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Count stepper */}
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1.5">
+                        כמה פעמים {cfg.per === 'day' ? 'ביום' : 'בשבוע'}
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <button onClick={() => updateCadence(ex.id, { count: Math.max(1, cfg.count - 1) })}
+                          className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-xl font-bold text-gray-600 flex-shrink-0">−</button>
+                        <div className="flex-1 text-center">
+                          <span className="text-3xl font-bold text-teal-600">{cfg.count}</span>
+                          <span className="text-sm text-gray-400 mr-1">{cfg.per === 'day' ? 'ביום' : 'בשבוע'}</span>
+                        </div>
+                        <button onClick={() => updateCadence(ex.id, { count: Math.min(cfg.per === 'day' ? 10 : 21, cfg.count + 1) })}
+                          className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-xl font-bold text-gray-600 flex-shrink-0">+</button>
+                      </div>
+                    </div>
+
+                    {/* Suggested hint */}
+                    {(cfg.count !== ex.suggestedFrequencyCount || cfg.per !== ex.suggestedFrequencyPer) && (
+                      <button onClick={() => updateCadence(ex.id, { count: ex.suggestedFrequencyCount, per: ex.suggestedFrequencyPer })}
+                        className="text-xs text-gray-400 underline">
+                        איפוס להמלצה: {ex.suggestedFrequencyCount}× {ex.suggestedFrequencyPer === 'day' ? 'ביום' : 'בשבוע'}
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
       </div>
 
-      {/* ── Sticky bottom action bar (exercises step only) ── */}
-      {step === 'exercises' && !loadingEx && (
+      {/* ── Sticky bottom button ── */}
+      {(step === 'exercises' || step === 'configure') && !loadingEx && (
         <div className="fixed bottom-0 inset-x-0 max-w-md mx-auto z-30 px-4 pb-6 pt-3 bg-gradient-to-t from-[#F0FAFA] to-transparent">
-          <button
-            onClick={handleAddTasks}
-            disabled={selectedIds.size === 0 || saving}
-            className="w-full py-4 rounded-2xl font-bold text-white text-base disabled:opacity-40 flex items-center justify-center gap-2"
-            style={{ background: 'linear-gradient(135deg,#0AB5B5,#06B6D4)' }}
-          >
-            {saving ? (
-              <div className="h-5 w-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-            ) : (
-              <>
-                <span>הוסף {selectedIds.size > 0 ? selectedIds.size : ''} תרגילים לפיד</span>
-                <span>→</span>
-              </>
-            )}
-          </button>
+          {step === 'exercises' ? (
+            <button onClick={handleProceedToConfigure}
+              disabled={selectedIds.size === 0}
+              className="w-full py-4 rounded-2xl font-bold text-white text-base disabled:opacity-40 flex items-center justify-center gap-2"
+              style={{ background: 'linear-gradient(135deg,#0AB5B5,#06B6D4)' }}>
+              המשך — הגדרת תדירות ({selectedIds.size} תרגילים) →
+            </button>
+          ) : (
+            <button onClick={handleAddTasks}
+              disabled={saving}
+              className="w-full py-4 rounded-2xl font-bold text-white text-base disabled:opacity-40 flex items-center justify-center gap-2"
+              style={{ background: 'linear-gradient(135deg,#0AB5B5,#06B6D4)' }}>
+              {saving
+                ? <div className="h-5 w-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                : `הוסף ${selectedExercises.length} תרגילים לפיד →`}
+            </button>
+          )}
         </div>
       )}
     </div>
   )
 }
 
-// ── ExerciseCard ───────────────────────────────────────────────────────────
+// ── ExerciseCard ──────────────────────────────────────────────────────────
 
-function ExerciseCard({
-  exercise, selected, expanded, onToggle, onExpand,
-}: {
+function ExerciseCard({ exercise, selected, expanded, onToggle, onExpand }: {
   exercise: Exercise
   selected: boolean
   expanded: boolean
   onToggle: () => void
   onExpand: () => void
 }) {
-  const diffColor: Record<string, string> = {
-    easy: '#10B981', medium: '#F59E0B', hard: '#EF4444',
-  }
+  const diffColor: Record<string, string> = { easy: '#10B981', medium: '#F59E0B', hard: '#EF4444' }
 
   return (
-    <div
-      className="bg-white rounded-2xl shadow-sm overflow-hidden border-2 transition-all"
-      style={{ borderColor: selected ? '#0AB5B5' : 'transparent' }}
-    >
-      {/* Main row */}
+    <div className="bg-white rounded-2xl shadow-sm overflow-hidden border-2 transition-all"
+      style={{ borderColor: selected ? '#0AB5B5' : 'transparent' }}>
       <div className="flex items-center gap-3 p-3">
-        {/* Checkbox */}
-        <button
-          onClick={onToggle}
+        <button onClick={onToggle}
           className="h-6 w-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all"
-          style={{
-            background: selected ? '#0AB5B5' : 'transparent',
-            borderColor: selected ? '#0AB5B5' : '#D1D5DB',
-          }}
-        >
+          style={{ background: selected ? '#0AB5B5' : 'transparent', borderColor: selected ? '#0AB5B5' : '#D1D5DB' }}>
           {selected && (
             <svg className="h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           )}
         </button>
-
-        {/* Name + tags */}
         <div className="flex-1 min-w-0" onClick={onExpand}>
           <div className="font-semibold text-gray-900 text-sm leading-tight">{exercise.name}</div>
-          {exercise.nameEn && (
-            <div className="text-xs text-gray-400 truncate">{exercise.nameEn}</div>
-          )}
+          {exercise.nameEn && <div className="text-xs text-gray-400 truncate">{exercise.nameEn}</div>}
           <div className="flex gap-2 mt-1 flex-wrap">
             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                  style={{ background: diffColor[exercise.difficulty] + '20', color: diffColor[exercise.difficulty] }}>
+              style={{ background: (diffColor[exercise.difficulty] ?? '#6B7280') + '20', color: diffColor[exercise.difficulty] ?? '#6B7280' }}>
               {DIFFICULTY_LABEL[exercise.difficulty] ?? exercise.difficulty}
             </span>
             <span className="text-[10px] text-gray-400">
-              {FREQ_LABEL(exercise.suggestedFrequencyCount, exercise.suggestedFrequencyPer)}
+              {exercise.suggestedFrequencyCount}× {exercise.suggestedFrequencyPer === 'day' ? 'ביום' : 'בשבוע'} (מומלץ)
             </span>
-            {exercise.suggestedDurationMinutes && (
-              <span className="text-[10px] text-gray-400">{exercise.suggestedDurationMinutes} דק׳</span>
-            )}
           </div>
         </div>
-
-        {/* Expand arrow */}
         <button onClick={onExpand} className="p-1 text-gray-400">
-          <svg
-            className="h-4 w-4 transition-transform"
-            style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-          >
+          <svg className="h-4 w-4 transition-transform" style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
       </div>
-
-      {/* Expanded content */}
       {expanded && (
-        <div className="px-4 pb-4 border-t border-gray-50 space-y-3 text-right" dir="ltr">
-          {exercise.description && (
-            <p className="text-sm text-gray-600 leading-relaxed">{exercise.description}</p>
-          )}
+        <div className="px-4 pb-4 border-t border-gray-50 space-y-3" dir="ltr">
+          {exercise.description && <p className="text-sm text-gray-600 leading-relaxed">{exercise.description}</p>}
           {exercise.instructions && (
             <div>
               <p className="text-xs font-semibold text-gray-500 mb-1 text-right" dir="rtl">הוראות:</p>
@@ -668,12 +615,9 @@ function ExerciseCard({
             </div>
           )}
           {exercise.youtubeSearchQuery && (
-            <a
-              href={`https://www.youtube.com/results?search_query=${encodeURIComponent(exercise.youtubeSearchQuery)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 text-sm font-semibold text-red-500"
-            >
+            <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent(exercise.youtubeSearchQuery)}`}
+              target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-2 text-sm font-semibold text-red-500">
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M23.495 6.205a3.007 3.007 0 00-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 00.527 6.205a31.247 31.247 0 00-.522 5.805 31.247 31.247 0 00.522 5.783 3.007 3.007 0 002.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 002.088-2.088 31.247 31.247 0 00.5-5.783 31.247 31.247 0 00-.5-5.805zM9.609 15.601V8.408l6.264 3.602z"/>
               </svg>
