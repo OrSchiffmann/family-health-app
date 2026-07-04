@@ -81,7 +81,7 @@ SELECT v.* FROM (VALUES
 
   ('c0000001-0000-0000-0000-000000000021', 'אני רואה משהו ש...', 'Sound I-Spy',
    'I-Spy with first sounds ("I spy something that starts with mmm..."). Builds sound-letter awareness and vocabulary.',
-   E'1. Pick an object in the room\n2. Say: "I spy something that starts with [first sound]"\n3. Child guesses; then switch roles\n4. Play 5-10 rounds',
+   E'1. Pick an object in the room\n2. Say: "I spy something that starts with [first sound]"\n3. Child guesses, then switch roles\n4. Play 5-10 rounds',
    'child', 36, 72, 'i spy phonics game preschool', 5, 1, 'day', 'easy', 11),
 
   ('c0000001-0000-0000-0000-000000000021', 'לספר את הסיפור מחדש', 'Story Retelling',
@@ -96,7 +96,7 @@ SELECT v.* FROM (VALUES
 
   ('c0000001-0000-0000-0000-000000000021', 'הוראות בשלושה שלבים', 'Three-Step Directions',
    'Following multi-step instructions ("touch your nose, clap twice, sit down") builds auditory memory and comprehension.',
-   E'1. Give a 2-step instruction first; if easy, move to 3 steps\n2. Say it once only — no repeating\n3. Make the actions silly and fun\n4. Switch: let the child give YOU instructions\n5. 5-6 rounds',
+   E'1. Give a 2-step instruction first, and if easy move to 3 steps\n2. Say it once only — no repeating\n3. Make the actions silly and fun\n4. Switch: let the child give YOU instructions\n5. 5-6 rounds',
    'child', 36, 72, 'following directions activity kids speech therapy', 5, 3, 'week', 'medium', 14),
 
   ('c0000001-0000-0000-0000-000000000021', 'בועות סבון ונשיפות', 'Bubbles & Blowing',
@@ -187,12 +187,12 @@ SELECT v.* FROM (VALUES
 
   ('c0000001-0000-0000-0000-000000000014', 'סריקת גוף', 'Body Scan Meditation',
    'Guided attention through the body from toes to head. Builds body awareness and releases unnoticed tension.',
-   E'1. Lie down, eyes closed\n2. Bring attention to the toes — just notice sensations\n3. Slowly move attention upward through each body part\n4. Where you find tension, breathe "into" it\n5. 10-20 minutes; guided audio recommended',
+   E'1. Lie down, eyes closed\n2. Bring attention to the toes — just notice sensations\n3. Slowly move attention upward through each body part\n4. Where you find tension, breathe "into" it\n5. 10-20 minutes, guided audio recommended',
    'adult', NULL, NULL, 'body scan meditation guided 10 minutes', 15, 3, 'week', 'medium', 44),
 
   ('c0000001-0000-0000-0000-000000000014', 'שחרור צוואר-כתפיים בנשימה', 'Breath-Linked Neck & Shoulder Release',
    'Combines gentle shoulder rolls and neck stretches with slow breathing. Ideal desk-break for tension headaches.',
-   E'1. Sit tall; inhale — raise shoulders to ears\n2. Exhale — roll them back and down\n3. Repeat 5 times\n4. Inhale center; exhale — ear toward shoulder, hold 3 breaths per side\n5. Finish with 5 slow belly breaths',
+   E'1. Sit tall. Inhale — raise shoulders to ears\n2. Exhale — roll them back and down\n3. Repeat 5 times\n4. Inhale center, exhale — ear toward shoulder, hold 3 breaths per side\n5. Finish with 5 slow belly breaths',
    'adult', NULL, NULL, 'neck shoulder release breathing exercise desk', 5, 2, 'day', 'easy', 45),
 
 -- ══ V3: ROLLING (2-8 months) ══════════════════════════════════
@@ -304,7 +304,7 @@ SELECT v.* FROM (VALUES
 
   ('c0000001-0000-0000-0000-000000000001', 'גשר קטן', 'Baby Bridges',
    'Gently lifting baby''s hips while the feet stay planted. Activates glutes and hamstrings — muscles needed for crawling and pulling to stand.',
-   E'1. Baby on the back, knees bent, feet flat on the mat\n2. Hold the feet in place with one hand\n3. With the other hand, gently lift under the hips 2-3 cm\n4. Hold 2-3 seconds, lower slowly\n5. 5-8 lifts; older babies start pushing up themselves',
+   E'1. Baby on the back, knees bent, feet flat on the mat\n2. Hold the feet in place with one hand\n3. With the other hand, gently lift under the hips 2-3 cm\n4. Hold 2-3 seconds, lower slowly\n5. 5-8 lifts, older babies start pushing up themselves',
    'toddler', 5, 12, 'baby bridge exercise hips physio', NULL, 1, 'day', 'medium', 64),
 
   ('c0000001-0000-0000-0000-000000000001', 'נדנוד על שש', 'All-Fours Rocking',
@@ -339,7 +339,7 @@ SELECT v.* FROM (VALUES
 
   ('c0000001-0000-0000-0000-000000000003', 'יחף על טקסטורות', 'Barefoot Texture Walk',
    'Standing and stepping barefoot on different surfaces (grass, carpet, foam mat, sand) develops foot strength, balance reactions and sensory maps of the feet.',
-   E'1. From supported standing age, hold baby upright barefoot\n2. Let the feet touch: carpet, cool floor, grass, a cushion\n3. Name each feeling; watch the toes react and grip\n4. For cruisers/walkers: a little texture path on the floor\n5. 5 minutes of exploration',
+   E'1. From supported standing age, hold baby upright barefoot\n2. Let the feet touch: carpet, cool floor, grass, a cushion\n3. Name each feeling, watch the toes react and grip\n4. For cruisers/walkers: a little texture path on the floor\n5. 5 minutes of exploration',
    'toddler', 6, 15, 'barefoot sensory walk baby foot development', 5, 3, 'week', 'easy', 71)
 
 ) AS v(category_id, name, name_en, description, instructions, target, age_min_months, age_max_months, youtube_search_query, suggested_duration_minutes, suggested_frequency_count, suggested_frequency_per, difficulty, sort_order)
