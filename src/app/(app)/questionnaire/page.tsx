@@ -334,7 +334,7 @@ export default function QuestionnairePage() {
         </div>
       </div>
 
-      <div className="flex-1 px-4 pt-4 pb-32 space-y-4">
+      <div className="flex-1 px-4 pt-4 pb-48 space-y-4">
 
         {/* ── Step: member ── */}
         {step === 'member' && (
