@@ -243,7 +243,7 @@ export default function QuestionnairePage() {
       }
 
       const cadence  = cadenceMap[exercise.id] ?? { count: exercise.suggestedFrequencyCount, per: exercise.suggestedFrequencyPer }
-      const taskType = exercise.suggestedDurationMinutes ? 'duration' : 'done_not_done'
+      const taskType = 'done_not_done'
 
       const descParts: string[] = []
       if (exercise.nameEn) descParts.push(exercise.nameEn)
@@ -270,8 +270,8 @@ export default function QuestionnairePage() {
         const { error: cadErr } = await supabase.from('cadence_versions').insert({
           task_id: task.id,
           effective_from: new Date().toISOString().split('T')[0],
-          target_count: taskType !== 'duration' ? cadence.count : null,
-          target_minutes: taskType === 'duration' ? exercise.suggestedDurationMinutes : null,
+          target_count: cadence.count,
+          target_minutes: null,
           per: cadence.per,
           times_per_day: (cadence.per !== 'day' && cadence.timesPerDay && cadence.timesPerDay > 1) ? cadence.timesPerDay : null,
         })
