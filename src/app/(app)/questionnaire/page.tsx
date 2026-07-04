@@ -537,7 +537,7 @@ export default function QuestionnairePage() {
 
       {/* ── Sticky bottom button ── */}
       {(step === 'exercises' || step === 'configure') && !loadingEx && (
-        <div className="fixed bottom-0 inset-x-0 max-w-md mx-auto z-30 px-4 pb-6 pt-3 bg-gradient-to-t from-[#F0FAFA] to-transparent">
+        <div className="fixed bottom-0 inset-x-0 max-w-md mx-auto z-50 px-4 pb-24 pt-3 bg-gradient-to-t from-[#F0FAFA] to-transparent">
           {step === 'exercises' ? (
             <button onClick={handleProceedToConfigure}
               disabled={selectedIds.size === 0}
