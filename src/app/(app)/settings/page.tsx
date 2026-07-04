@@ -89,6 +89,7 @@ export default function SettingsPage() {
         id: m.id, familyId: m.family_id, name: m.name,
         avatarColor: m.avatar_color, avatarUrl: m.avatar_url ?? null,
         isArchived: m.is_archived, createdAt: m.created_at,
+        celebrationMode: m.celebration_mode ?? false,
       })))
       const allUsers = (usersData ?? []).map((u: any) => ({
         ...u,
@@ -131,6 +132,11 @@ export default function SettingsPage() {
   async function deleteCategory(id: string) {
     await supabase.from('categories').delete().eq('id', id)
     setCategories((prev) => prev.filter((c) => c.id !== id))
+  }
+
+  async function toggleCelebration(memberId: string, current: boolean) {
+    await supabase.from('members').update({ celebration_mode: !current }).eq('id', memberId)
+    setMembers((prev) => prev.map((m) => m.id === memberId ? { ...m, celebrationMode: !current } : m))
   }
 
   async function saveMember() {
@@ -382,6 +388,12 @@ export default function SettingsPage() {
                         {m.name}
                         {m.isArchived && <span className="mr-1 text-xs text-gray-400 font-normal">(בארכיון)</span>}
                       </span>
+                      <button
+                        onClick={() => toggleCelebration(m.id, m.celebrationMode)}
+                        title="מצב חגיגה"
+                        className={`text-lg transition-all ${m.celebrationMode ? 'opacity-100 scale-110' : 'opacity-30 grayscale'}`}>
+                        🎉
+                      </button>
                       <button onClick={() => { setEditMemberId(m.id); setEditMemberName(m.name); setEditMemberColor(m.avatarColor) }}
                         className="text-xs text-teal-500 hover:text-teal-700 transition-colors">ערוך</button>
                       {m.isArchived ? (

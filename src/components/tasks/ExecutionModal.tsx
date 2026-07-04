@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Member, TaskWithDetails } from '@/types'
 import { getActiveCadence } from '@/lib/progress'
+import CelebrationOverlay from '@/components/ui/CelebrationOverlay'
 
 interface Props {
   taskId: string
@@ -30,6 +31,7 @@ export default function ExecutionModal({ taskId, memberId, members, onClose, onS
   const [execCount, setExecCount] = useState(1)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [showCelebration, setShowCelebration] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
@@ -143,13 +145,23 @@ export default function ExecutionModal({ taskId, memberId, members, onClose, onS
     if (saveErr) {
       setError('שגיאה בשמירת הביצוע')
     } else {
-      onSaved()
+      const member = members.find((m) => m.id === selectedMemberId)
+      if (member?.celebrationMode) {
+        setShowCelebration(true)
+      } else {
+        onSaved()
+      }
     }
   }
 
   const assignedMembers = members.filter((m) => task?.assignedMembers.includes(m.id))
   const cadence = task ? getActiveCadence(task.cadenceVersions, new Date()) : null
   const targetMinutes = cadence?.targetMinutes ?? 0
+
+  if (showCelebration) {
+    const member = members.find((m) => m.id === selectedMemberId)
+    return <CelebrationOverlay memberName={member?.name ?? ''} onDone={onSaved} />
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>

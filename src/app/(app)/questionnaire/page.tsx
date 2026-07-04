@@ -95,7 +95,7 @@ export default function QuestionnairePage() {
       setMembers((membersData ?? []).map((m: any) => ({
         id: m.id, familyId: m.family_id, name: m.name,
         avatarColor: m.avatar_color, avatarUrl: m.avatar_url ?? null,
-        isArchived: m.is_archived, createdAt: m.created_at,
+        isArchived: m.is_archived, createdAt: m.created_at, celebrationMode: m.celebration_mode ?? false,
       })))
     })()
   }, [])

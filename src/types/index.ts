@@ -20,6 +20,7 @@ export interface Member {
   avatarUrl: string | null
   isArchived: boolean
   createdAt: string
+  celebrationMode: boolean
 }
 
 export interface Category {

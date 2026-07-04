@@ -37,6 +37,7 @@ export default async function NewTaskPage() {
     avatarUrl: m.avatar_url ?? null,
     isArchived: m.is_archived,
     createdAt: m.created_at,
+    celebrationMode: m.celebration_mode ?? false,
   }))
 
   const mappedCategories = (cats ?? []).map((c: any) => ({
