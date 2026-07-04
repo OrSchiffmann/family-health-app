@@ -33,6 +33,8 @@ export default function FeedPage() {
   const [confetti, setConfetti] = useState(false)
   const [dailyExercise, setDailyExercise] = useState<{ name: string; nameEn: string | null; description: string | null; emoji: string } | null>(null)
   const [dailyDismissed, setDailyDismissed] = useState(false)
+  const [familyId, setFamilyId] = useState('')
+  const [memberAges, setMemberAges] = useState<{ id: string; months: number | null }[]>([])
   const preLogProgressRef = useRef<CadenceProgress | null>(null)
 
   const [filters, setFilters] = useState<FeedFilters>({
@@ -59,6 +61,7 @@ export default function FeedPage() {
     if (!fu) { router.push('/onboarding'); return }
     if (fu.is_approved === false) { router.push('/pending'); return }
     const familyId = fu.family_id
+    setFamilyId(familyId)
 
     const [{ data: familyData }, { data: membersData }, { data: tasksData }] = await Promise.all([
       supabase.from('families').select('first_day_of_week').eq('id', familyId).single(),
@@ -84,6 +87,14 @@ export default function FeedPage() {
       createdAt: m.created_at,
       celebrationMode: m.celebration_mode ?? false,
     })))
+
+    setMemberAges((membersData ?? []).map((m: any) => {
+      if (!m.birth_date) return { id: m.id, months: null }
+      const birth = new Date(m.birth_date)
+      const months = (new Date().getFullYear() - birth.getFullYear()) * 12
+                   + (new Date().getMonth() - birth.getMonth())
+      return { id: m.id, months }
+    }))
 
     const cats: Category[] = []
     const enriched: TaskWithDetails[] = (tasksData ?? []).map((t: any) => {
@@ -169,22 +180,40 @@ export default function FeedPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  // Exercise of the day — deterministic daily pick from the library
+  // Exercise of the day — deterministic daily pick, scoped to targets relevant to this family
   useEffect(() => {
     const todayKey = new Date().toDateString()
     if (localStorage.getItem('daily_exercise_dismissed') === todayKey) {
       setDailyDismissed(true)
       return
     }
+    if (members.length === 0) return
+
+    // Map each member's age to the exercise_library "target" bucket it should draw from
+    const targets = new Set<'toddler' | 'child' | 'adult'>()
+    memberAges.forEach(({ months }) => {
+      if (months == null) targets.add('adult')
+      else if (months <= 42) targets.add('toddler')
+      else if (months <= 72) targets.add('child')
+      else targets.add('adult')
+    })
+    if (targets.size === 0) targets.add('adult')
+
     ;(async () => {
       const { data } = await supabase
         .from('exercise_library')
         .select('name, name_en, description, exercise_library_categories(emoji)')
         .eq('is_active', true)
+        .in('target', Array.from(targets))
       if (!data || data.length === 0) return
+
+      // Deterministic per day AND per family, so different families see different picks
       const start = new Date(new Date().getFullYear(), 0, 0)
       const dayOfYear = Math.floor((Date.now() - start.getTime()) / 86400000)
-      const pick: any = data[dayOfYear % data.length]
+      let familyHash = 0
+      for (const ch of familyId) familyHash = (familyHash * 31 + ch.charCodeAt(0)) >>> 0
+      const pick: any = data[(dayOfYear + familyHash) % data.length]
+
       setDailyExercise({
         name: pick.name,
         nameEn: pick.name_en,
@@ -192,7 +221,7 @@ export default function FeedPage() {
         emoji: pick.exercise_library_categories?.emoji ?? '💡',
       })
     })()
-  }, [])
+  }, [members.length, memberAges, familyId])
 
   function dismissDaily() {
     localStorage.setItem('daily_exercise_dismissed', new Date().toDateString())
