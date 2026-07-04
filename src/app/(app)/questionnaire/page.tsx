@@ -248,10 +248,6 @@ export default function QuestionnairePage() {
       const descParts: string[] = []
       if (exercise.nameEn) descParts.push(exercise.nameEn)
       if (exercise.description) descParts.push(exercise.description)
-      if (exercise.youtubeSearchQuery) {
-        const q = encodeURIComponent(exercise.youtubeSearchQuery)
-        descParts.push(`🎬 YouTube: https://www.youtube.com/results?search_query=${q}`)
-      }
 
       const { data: task } = await supabase
         .from('tasks')
@@ -276,6 +272,16 @@ export default function QuestionnairePage() {
           times_per_day: (cadence.timesPerDay && cadence.timesPerDay > 1) ? cadence.timesPerDay : null,
         })
         if (cadErr) throw new Error(`cadence insert: ${cadErr.message}`)
+
+        if (exercise.youtubeSearchQuery) {
+          const q = encodeURIComponent(exercise.youtubeSearchQuery)
+          await supabase.from('attachments').insert({
+            task_id: task.id,
+            type: 'link',
+            url: `https://www.youtube.com/results?search_query=${q}`,
+            title: `🎬 ${exercise.youtubeSearchQuery}`,
+          })
+        }
       }
     }
 

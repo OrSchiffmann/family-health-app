@@ -26,6 +26,7 @@ interface FormState {
   targetCount: string
   targetMinutes: string
   per: CadencePer
+  timesPerDay: string
   endDate: string
   selectedTags: string[]
 }
@@ -61,6 +62,7 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
     targetCount: '3',
     targetMinutes: '30',
     per: 'week',
+    timesPerDay: '',
     endDate: '',
     selectedTags: [],
     ...defaults,
@@ -165,6 +167,7 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
       target_count: form.taskType === 'done_not_done' ? parseInt(form.targetCount) : null,
       target_minutes: form.taskType === 'duration' ? parseInt(form.targetMinutes) : null,
       per: form.per,
+      times_per_day: (form.timesPerDay && parseInt(form.timesPerDay) > 1) ? parseInt(form.timesPerDay) : null,
     })
 
     // Sync tags
@@ -443,6 +446,23 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                כמה פעמים ביום (אופציונלי)
+              </label>
+              <p className="text-xs text-gray-400 mb-2">
+                למשל: 3 פעמים ביום, 5 ימים בשבוע
+              </p>
+              <input
+                type="number"
+                min={2}
+                placeholder="ללא"
+                value={form.timesPerDay}
+                onChange={(e) => update('timesPerDay', e.target.value)}
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-teal-500"
+              />
             </div>
           </>
         )}
