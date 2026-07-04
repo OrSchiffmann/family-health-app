@@ -32,6 +32,9 @@ export default function ExecutionModal({ taskId, memberId, members, onClose, onS
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [showCelebration, setShowCelebration] = useState(false)
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
@@ -115,6 +118,17 @@ export default function ExecutionModal({ taskId, memberId, members, onClose, onS
     return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
   }
 
+  function handlePhotoSelect(file: File) {
+    setPhotoFile(file)
+    setPhotoPreview(URL.createObjectURL(file))
+  }
+
+  function removePhoto() {
+    if (photoPreview) URL.revokeObjectURL(photoPreview)
+    setPhotoFile(null)
+    setPhotoPreview(null)
+  }
+
   async function handleSubmit() {
     if (!task || !selectedMemberId) return
     setSaving(true)
@@ -139,6 +153,27 @@ export default function ExecutionModal({ taskId, memberId, members, onClose, onS
         p_tag_ids: selectedTags,
       })
       if (err) { saveErr = err; break }
+    }
+
+    if (!saveErr && photoFile) {
+      setUploadingPhoto(true)
+      const ext = photoFile.name.split('.').pop() ?? 'jpg'
+      const path = `${taskId}/${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('log-photos').upload(path, photoFile)
+      if (!upErr) {
+        const { data: { publicUrl } } = supabase.storage.from('log-photos').getPublicUrl(path)
+        const member = members.find((m) => m.id === selectedMemberId)
+        const when = new Date(executionTime || Date.now()).toLocaleString('he-IL', {
+          day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+        })
+        await supabase.from('attachments').insert({
+          task_id: taskId,
+          type: 'image',
+          url: publicUrl,
+          title: `📷 תיעוד ביצוע — ${when}${member ? ` · ${member.name}` : ''}`,
+        })
+      }
+      setUploadingPhoto(false)
     }
 
     setSaving(false)
@@ -337,15 +372,39 @@ export default function ExecutionModal({ taskId, memberId, members, onClose, onS
           </div>
         )}
 
+        {/* Photo */}
+        <div>
+          <label className="text-sm font-medium text-gray-700 mb-1.5 block">תיעוד בתמונה (אופציונלי)</label>
+          {photoPreview ? (
+            <div className="relative w-fit">
+              <img src={photoPreview} alt="תצוגה מקדימה" className="h-28 w-28 rounded-2xl object-cover border border-gray-200" />
+              <button
+                onClick={removePhoto}
+                className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-gray-900 text-white flex items-center justify-center text-xs"
+              >✕</button>
+            </div>
+          ) : (
+            <label className="flex items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 px-4 py-3 text-sm text-gray-500 cursor-pointer w-fit">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+              </svg>
+              צלמי או העלי תמונה
+              <input type="file" accept="image/*" capture="environment" className="sr-only"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoSelect(f) }} />
+            </label>
+          )}
+        </div>
+
         {error && <p className="text-sm text-red-500 text-center">{error}</p>}
 
         {/* Submit */}
         <button
           onClick={handleSubmit}
-          disabled={saving || (!selectedMemberId)}
+          disabled={saving || uploadingPhoto || (!selectedMemberId)}
           className="w-full rounded-xl bg-teal-600 text-white py-3.5 font-semibold text-base disabled:opacity-60 active:scale-95 transition-all"
         >
-          {saving ? 'שומר...' : 'שמור ביצוע'}
+          {saving || uploadingPhoto ? 'שומר...' : 'שמור ביצוע'}
         </button>
       </div>
     </div>
