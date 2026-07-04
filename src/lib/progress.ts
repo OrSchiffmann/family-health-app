@@ -23,6 +23,30 @@ export function getActiveCadence(versions: CadenceVersion[], date: Date): Cadenc
   return active
 }
 
+// Consecutive days (ending today or yesterday) where the member logged
+// at least `requiredPerDay` completions. Powers the 🔥 streak badge.
+export function computeDayStreak(logs: LogEntry[], memberId: string | null, requiredPerDay = 1): number {
+  const counts: Record<string, number> = {}
+  for (const l of logs) {
+    if (!l.completed) continue
+    if (memberId && l.memberId !== memberId) continue
+    const d = new Date(l.executionTime ?? l.loggedAt)
+    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+    counts[key] = (counts[key] ?? 0) + 1
+  }
+  const keyOf = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+  let streak = 0
+  const cursor = new Date()
+  // Today counts if already done, but an unfinished today doesn't break the streak
+  if ((counts[keyOf(cursor)] ?? 0) >= requiredPerDay) streak++
+  cursor.setDate(cursor.getDate() - 1)
+  while ((counts[keyOf(cursor)] ?? 0) >= requiredPerDay) {
+    streak++
+    cursor.setDate(cursor.getDate() - 1)
+  }
+  return streak
+}
+
 export function computeProgress(
   task: TaskWithDetails,
   memberId: string | null,

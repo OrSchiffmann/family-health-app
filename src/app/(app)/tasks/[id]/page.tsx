@@ -281,7 +281,9 @@ export default function TaskDetailPage() {
               <p className="text-sm text-gray-700">
                 {task.taskType === 'duration'
                   ? `${cadence.targetMinutes} דקות ל${cadence.per === 'day' ? 'יום' : cadence.per === 'week' ? 'שבוע' : 'חודש'}`
-                  : `${cadence.targetCount} פעמים ל${cadence.per === 'day' ? 'יום' : cadence.per === 'week' ? 'שבוע' : 'חודש'}`}
+                  : cadence.timesPerDay && cadence.timesPerDay > 1
+                    ? `${cadence.timesPerDay} פעמים ביום, ${cadence.targetCount} ימים ${cadence.per === 'day' ? 'ביום' : cadence.per === 'week' ? 'בשבוע' : 'בחודש'}`
+                    : `${cadence.targetCount} פעמים ל${cadence.per === 'day' ? 'יום' : cadence.per === 'week' ? 'שבוע' : 'חודש'}`}
               </p>
             </div>
           </section>

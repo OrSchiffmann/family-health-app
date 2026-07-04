@@ -8,11 +8,12 @@ interface Props {
   task: TaskWithDetails
   members: Member[]
   progress: CadenceProgress
+  streak?: number
   showMembers?: boolean
   onLog: (taskId: string) => void
 }
 
-export default function TaskCard({ task, members, progress, showMembers = false, onLog }: Props) {
+export default function TaskCard({ task, members, progress, streak = 0, showMembers = false, onLog }: Props) {
   const done = progress.achieved >= progress.target && progress.target > 0
 
   return (
@@ -21,11 +22,18 @@ export default function TaskCard({ task, members, progress, showMembers = false,
         {/* Header */}
         <div className="flex items-start justify-between gap-2 mb-1">
           <h3 className="font-bold text-gray-900 text-base leading-snug flex-1">{task.title}</h3>
-          {done && (
-            <span className="shrink-0 text-xs font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#CCFBF1', color: '#0D9488' }}>
-              ✓ הושלם
-            </span>
-          )}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {streak >= 2 && (
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFF7ED', color: '#EA580C' }}>
+                🔥 {streak}
+              </span>
+            )}
+            {done && (
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#CCFBF1', color: '#0D9488' }}>
+                ✓ הושלם
+              </span>
+            )}
+          </div>
         </div>
 
         {task.subcategory && (
@@ -55,6 +63,7 @@ export default function TaskCard({ task, members, progress, showMembers = false,
           target={progress.target}
           taskType={task.taskType}
           per={progress.per}
+          timesPerDay={progress.timesPerDay}
         />
 
         {task.endDate && (

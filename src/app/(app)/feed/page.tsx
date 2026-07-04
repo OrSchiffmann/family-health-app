@@ -9,7 +9,7 @@ import FilterBar, { type FeedFilters } from '@/components/feed/FilterBar'
 import MemberChip from '@/components/ui/MemberChip'
 import ExecutionModal from '@/components/tasks/ExecutionModal'
 import type { TaskWithDetails, Member, Category, CadenceProgress, LogEntry, FirstDayOfWeek } from '@/types'
-import { computeProgress } from '@/lib/progress'
+import { computeProgress, computeDayStreak, getActiveCadence } from '@/lib/progress'
 import Toast from '@/components/ui/Toast'
 import Confetti from '@/components/ui/Confetti'
 
@@ -198,6 +198,23 @@ export default function FeedPage() {
     return computeProgress(task, selectedMember, taskLogs, firstDayOfWeek)
   }
 
+  function getStreak(task: TaskWithDetails): number {
+    if (task.taskType !== 'done_not_done') return 0
+    const cadence = getActiveCadence(task.cadenceVersions, new Date())
+    if (!cadence) return 0
+    // Daily requirement: timesPerDay for compound cadences, targetCount for daily tasks, else any completion
+    const required = cadence.timesPerDay ?? (cadence.per === 'day' ? (cadence.targetCount ?? 1) : 1)
+    const taskLogs = logs.filter((l) => l.taskId === task.id)
+    return computeDayStreak(taskLogs, selectedMember, required)
+  }
+
+  // Daily summary across the visible tasks
+  const summary = (() => {
+    const withTarget = filteredTasks.filter((t) => getProgress(t).target > 0)
+    const done = withTarget.filter((t) => { const p = getProgress(t); return p.achieved >= p.target }).length
+    return { done, total: withTarget.length }
+  })()
+
   function handleLog(taskId: string) {
     const task = filteredTasks.find((t) => t.id === taskId)
     if (task) preLogProgressRef.current = getProgress(task)
@@ -258,6 +275,32 @@ export default function FeedPage() {
 
       {/* Task list */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        {summary.total > 0 && (
+          <div className="rounded-3xl px-5 py-4 text-white" style={{ background: 'linear-gradient(135deg, #0AB5B5, #0891B2)' }}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-bold text-base">
+                  {summary.done === summary.total
+                    ? '🎉 הכל הושלם — יום מושלם!'
+                    : `${summary.done} מתוך ${summary.total} הושלמו`}
+                </p>
+                <p className="text-xs text-white/70 mt-0.5">
+                  {new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}
+                </p>
+              </div>
+              <div className="relative h-12 w-12 shrink-0">
+                <svg viewBox="0 0 36 36" className="h-12 w-12 -rotate-90">
+                  <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="4" />
+                  <circle cx="18" cy="18" r="15" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round"
+                    strokeDasharray={`${(summary.done / summary.total) * 94.2} 94.2`} />
+                </svg>
+                <span className="absolute inset-0 flex items-center justify-center text-xs font-bold">
+                  {Math.round((summary.done / summary.total) * 100)}%
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
         {filteredTasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
@@ -275,6 +318,7 @@ export default function FeedPage() {
               task={task}
               members={members.filter((m) => task.assignedMembers.includes(m.id))}
               progress={getProgress(task)}
+              streak={getStreak(task)}
               showMembers={selectedMember === null}
               onLog={handleLog}
             />
