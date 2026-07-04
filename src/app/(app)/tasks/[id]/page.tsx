@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { createClient } from '@/lib/supabase/client'
 import type { TaskWithDetails, Member, LogEntry } from '@/types'
 import { getActiveCadence } from '@/lib/progress'
@@ -211,7 +212,16 @@ export default function TaskDetailPage() {
           <section>
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">תיאור</h2>
             <div className="prose prose-sm max-w-none text-gray-700">
-              <ReactMarkdown>{task.description}</ReactMarkdown>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  a: ({ href, children }) => (
+                    <a href={href} target="_blank" rel="noopener noreferrer" className="text-teal-600 underline break-all">
+                      {children}
+                    </a>
+                  ),
+                }}
+              >{task.description}</ReactMarkdown>
             </div>
           </section>
         )}
