@@ -114,6 +114,7 @@ export default function FeedPage() {
           targetCount: v.target_count,
           targetMinutes: v.target_minutes,
           per: v.per,
+          timesPerDay: v.times_per_day ?? null,
         })),
         mediaAttachments: t.attachments,
       }

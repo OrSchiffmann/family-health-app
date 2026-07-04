@@ -123,6 +123,7 @@ export default function StatisticsPage() {
           cadenceVersions: (t.cadence_versions ?? []).map((v: any) => ({
             id: v.id, taskId: v.task_id, effectiveFrom: v.effective_from,
             targetCount: v.target_count, targetMinutes: v.target_minutes, per: v.per,
+            timesPerDay: v.times_per_day ?? null,
           })),
           mediaAttachments: t.attachments,
         }

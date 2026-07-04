@@ -40,6 +40,7 @@ interface Exercise {
 interface CadenceConfig {
   count: number
   per: 'day' | 'week' | 'month'
+  timesPerDay?: number
 }
 
 type Step = 'member' | 'type' | 'exercises' | 'configure' | 'done'
@@ -272,6 +273,7 @@ export default function QuestionnairePage() {
           target_count: taskType !== 'duration' ? cadence.count : null,
           target_minutes: taskType === 'duration' ? exercise.suggestedDurationMinutes : null,
           per: cadence.per,
+          times_per_day: (cadence.per !== 'day' && cadence.timesPerDay && cadence.timesPerDay > 1) ? cadence.timesPerDay : null,
         })
         if (cadErr) throw new Error(`cadence insert: ${cadErr.message}`)
       }
@@ -528,6 +530,36 @@ export default function QuestionnairePage() {
                           className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-xl font-bold text-gray-600 flex-shrink-0">+</button>
                       </div>
                     </div>
+
+                    {/* timesPerDay: only shown when per is week/month */}
+                    {cfg.per !== 'day' && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <p className="text-xs text-gray-500">כמה פעמים ביום? (אופציונלי)</p>
+                          {cfg.timesPerDay && cfg.timesPerDay > 1 && (
+                            <button onClick={() => updateCadence(ex.id, { timesPerDay: undefined })}
+                              className="text-[10px] text-gray-400 underline">ביטול</button>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => updateCadence(ex.id, { timesPerDay: Math.max(2, (cfg.timesPerDay ?? 1) - 1) })}
+                            className="h-9 w-9 rounded-full bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-600 flex-shrink-0">−</button>
+                          <div className="flex-1 text-center">
+                            <span className="text-2xl font-bold" style={{ color: cfg.timesPerDay && cfg.timesPerDay > 1 ? '#0D9488' : '#9CA3AF' }}>
+                              {cfg.timesPerDay && cfg.timesPerDay > 1 ? cfg.timesPerDay : '—'}
+                            </span>
+                            <span className="text-sm text-gray-400 mr-1">{cfg.timesPerDay && cfg.timesPerDay > 1 ? 'ביום' : ''}</span>
+                          </div>
+                          <button onClick={() => updateCadence(ex.id, { timesPerDay: Math.min(10, (cfg.timesPerDay ?? 1) + 1) })}
+                            className="h-9 w-9 rounded-full bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-600 flex-shrink-0">+</button>
+                        </div>
+                        {cfg.timesPerDay && cfg.timesPerDay > 1 && (
+                          <p className="text-xs text-teal-600 text-center mt-1">
+                            {cfg.timesPerDay} פעמים ביום, {cfg.count} {cfg.per === 'week' ? 'ימים בשבוע' : 'ימים בחודש'}
+                          </p>
+                        )}
+                      </div>
+                    )}
 
                     {/* Suggested hint */}
                     {(cfg.count !== ex.suggestedFrequencyCount || cfg.per !== ex.suggestedFrequencyPer) && (

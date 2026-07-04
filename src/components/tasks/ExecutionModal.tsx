@@ -58,6 +58,7 @@ export default function ExecutionModal({ taskId, memberId, members, onClose, onS
             targetCount: v.target_count,
             targetMinutes: v.target_minutes,
             per: v.per,
+            timesPerDay: v.times_per_day ?? null,
           })),
           mediaAttachments: data.attachments,
         })

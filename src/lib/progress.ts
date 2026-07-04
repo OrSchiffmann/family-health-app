@@ -50,13 +50,23 @@ export function computeProgress(
     return true
   })
 
-  const achieved =
-    task.taskType === 'duration'
-      ? Math.round(relevantLogs.reduce((sum, l) => {
-          const mins = l.durationSeconds != null ? l.durationSeconds / 60 : (l.durationMinutes ?? 0)
-          return sum + mins
-        }, 0))
-      : relevantLogs.filter((l) => l.completed).length
+  let achieved: number
+  if (task.taskType === 'duration') {
+    achieved = Math.round(relevantLogs.reduce((sum, l) => {
+      const mins = l.durationSeconds != null ? l.durationSeconds / 60 : (l.durationMinutes ?? 0)
+      return sum + mins
+    }, 0))
+  } else if (cadence.timesPerDay && cadence.per !== 'day') {
+    // Compound cadence: count days where completions >= timesPerDay
+    const byDay: Record<string, number> = {}
+    for (const l of relevantLogs.filter((l) => l.completed)) {
+      const day = new Date(l.executionTime ?? l.loggedAt).toISOString().slice(0, 10)
+      byDay[day] = (byDay[day] ?? 0) + 1
+    }
+    achieved = Object.values(byDay).filter((c) => c >= cadence.timesPerDay!).length
+  } else {
+    achieved = relevantLogs.filter((l) => l.completed).length
+  }
 
-  return { target, achieved, per: cadence.per, taskType: task.taskType }
+  return { target, achieved, per: cadence.per, taskType: task.taskType, timesPerDay: cadence.timesPerDay }
 }

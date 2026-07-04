@@ -62,6 +62,7 @@ export interface CadenceVersion {
   targetCount: number | null
   targetMinutes: number | null
   per: CadencePer
+  timesPerDay: number | null
 }
 
 export interface Task {
@@ -127,4 +128,5 @@ export interface CadenceProgress {
   achieved: number
   per: CadencePer
   taskType: TaskType
+  timesPerDay?: number | null
 }
