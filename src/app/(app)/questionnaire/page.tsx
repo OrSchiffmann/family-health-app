@@ -39,7 +39,7 @@ interface Exercise {
 
 interface CadenceConfig {
   count: number
-  per: 'day' | 'week'
+  per: 'day' | 'week' | 'month'
 }
 
 type Step = 'member' | 'type' | 'exercises' | 'configure' | 'done'
@@ -78,6 +78,7 @@ export default function QuestionnairePage() {
   const [expanded, setExpanded]                   = useState<string | null>(null)
   const [loadingEx, setLoadingEx]                 = useState(false)
   const [saving, setSaving]                       = useState(false)
+  const [saveError, setSaveError]                 = useState<string | null>(null)
   const [addedCount, setAddedCount]               = useState(0)
 
   useEffect(() => {
@@ -208,7 +209,9 @@ export default function QuestionnairePage() {
   async function handleAddTasks() {
     if (!selectedMember || !familyId || selectedIds.size === 0) return
     setSaving(true)
+    setSaveError(null)
 
+    try {
     const selectedExercises = exercises.filter(e => selectedIds.has(e.id))
     const catCache = new Map<string, string>()
 
@@ -222,17 +225,18 @@ export default function QuestionnairePage() {
       } else {
         const { data: existing } = await supabase
           .from('categories').select('id')
-          .eq('family_id', familyId).eq('member_id', selectedMember.id).eq('name', catName)
+          .eq('member_id', selectedMember.id).eq('name', catName)
           .maybeSingle()
 
         if (existing) {
           categoryId = existing.id
         } else {
-          const { data: created } = await supabase
+          const { data: created, error: catErr } = await supabase
             .from('categories')
-            .insert({ family_id: familyId, member_id: selectedMember.id, name: catName, color: catColor, is_default: false, sort_order: 99 })
+            .insert({ member_id: selectedMember.id, name: catName, color: catColor, is_default: false, sort_order: 99 })
             .select('id').single()
-          categoryId = created!.id
+          if (catErr || !created) throw new Error(`category insert: ${catErr?.message}`)
+          categoryId = created.id
         }
         catCache.set(catName, categoryId)
       }
@@ -262,19 +266,24 @@ export default function QuestionnairePage() {
         .select('id').single()
 
       if (task) {
-        await supabase.from('cadence_versions').insert({
+        const { error: cadErr } = await supabase.from('cadence_versions').insert({
           task_id: task.id,
           effective_from: new Date().toISOString().split('T')[0],
           target_count: taskType !== 'duration' ? cadence.count : null,
           target_minutes: taskType === 'duration' ? exercise.suggestedDurationMinutes : null,
           per: cadence.per,
         })
+        if (cadErr) throw new Error(`cadence insert: ${cadErr.message}`)
       }
     }
 
     setAddedCount(selectedIds.size)
-    setSaving(false)
     setStep('done')
+    } catch (err: any) {
+      setSaveError(err?.message ?? 'שגיאה בשמירה — נסי שוב')
+    } finally {
+      setSaving(false)
+    }
   }
 
   // ── Derived ────────────────────────────────────────────────────────────────
@@ -484,11 +493,11 @@ export default function QuestionnairePage() {
                       </div>
                     </div>
 
-                    {/* Per: day / week toggle */}
+                    {/* Per: day / week / month toggle */}
                     <div>
                       <p className="text-xs text-gray-500 mb-1.5">תדירות</p>
                       <div className="flex gap-2">
-                        {(['day', 'week'] as const).map(p => (
+                        {(['day', 'week', 'month'] as const).map(p => (
                           <button key={p}
                             onClick={() => updateCadence(ex.id, { per: p })}
                             className="flex-1 py-2 rounded-xl text-sm font-semibold border-2 transition-all"
@@ -497,7 +506,7 @@ export default function QuestionnairePage() {
                               borderColor: cfg.per === p ? '#0AB5B5' : '#E5E7EB',
                               color: cfg.per === p ? '#0D9488' : '#6B7280',
                             }}>
-                            {p === 'day' ? 'ביום' : 'בשבוע'}
+                            {p === 'day' ? 'ביום' : p === 'week' ? 'בשבוע' : 'בחודש'}
                           </button>
                         ))}
                       </div>
@@ -506,25 +515,25 @@ export default function QuestionnairePage() {
                     {/* Count stepper */}
                     <div>
                       <p className="text-xs text-gray-500 mb-1.5">
-                        כמה פעמים {cfg.per === 'day' ? 'ביום' : 'בשבוע'}
+                        כמה פעמים {cfg.per === 'day' ? 'ביום' : cfg.per === 'week' ? 'בשבוע' : 'בחודש'}
                       </p>
                       <div className="flex items-center gap-3">
                         <button onClick={() => updateCadence(ex.id, { count: Math.max(1, cfg.count - 1) })}
                           className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-xl font-bold text-gray-600 flex-shrink-0">−</button>
                         <div className="flex-1 text-center">
                           <span className="text-3xl font-bold text-teal-600">{cfg.count}</span>
-                          <span className="text-sm text-gray-400 mr-1">{cfg.per === 'day' ? 'ביום' : 'בשבוע'}</span>
+                          <span className="text-sm text-gray-400 mr-1">{cfg.per === 'day' ? 'ביום' : cfg.per === 'week' ? 'בשבוע' : 'בחודש'}</span>
                         </div>
-                        <button onClick={() => updateCadence(ex.id, { count: Math.min(cfg.per === 'day' ? 10 : 21, cfg.count + 1) })}
+                        <button onClick={() => updateCadence(ex.id, { count: Math.min(cfg.per === 'day' ? 10 : cfg.per === 'week' ? 21 : 31, cfg.count + 1) })}
                           className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-xl font-bold text-gray-600 flex-shrink-0">+</button>
                       </div>
                     </div>
 
                     {/* Suggested hint */}
                     {(cfg.count !== ex.suggestedFrequencyCount || cfg.per !== ex.suggestedFrequencyPer) && (
-                      <button onClick={() => updateCadence(ex.id, { count: ex.suggestedFrequencyCount, per: ex.suggestedFrequencyPer })}
+                      <button onClick={() => updateCadence(ex.id, { count: ex.suggestedFrequencyCount, per: ex.suggestedFrequencyPer as 'day'|'week'|'month' })}
                         className="text-xs text-gray-400 underline">
-                        איפוס להמלצה: {ex.suggestedFrequencyCount}× {ex.suggestedFrequencyPer === 'day' ? 'ביום' : 'בשבוע'}
+                        איפוס להמלצה: {ex.suggestedFrequencyCount}× {ex.suggestedFrequencyPer === 'day' ? 'ביום' : ex.suggestedFrequencyPer === 'week' ? 'בשבוע' : 'בחודש'}
                       </button>
                     )}
                   </div>
@@ -546,14 +555,19 @@ export default function QuestionnairePage() {
               המשך — הגדרת תדירות ({selectedIds.size} תרגילים) →
             </button>
           ) : (
-            <button onClick={handleAddTasks}
-              disabled={saving}
-              className="w-full py-4 rounded-2xl font-bold text-white text-base disabled:opacity-40 flex items-center justify-center gap-2"
-              style={{ background: 'linear-gradient(135deg,#0AB5B5,#06B6D4)' }}>
-              {saving
-                ? <div className="h-5 w-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                : `הוסף ${selectedExercises.length} תרגילים לפיד →`}
-            </button>
+            <div className="space-y-2">
+              {saveError && (
+                <p className="text-sm text-red-500 text-center bg-red-50 rounded-xl py-2 px-3">{saveError}</p>
+              )}
+              <button onClick={handleAddTasks}
+                disabled={saving}
+                className="w-full py-4 rounded-2xl font-bold text-white text-base disabled:opacity-40 flex items-center justify-center gap-2"
+                style={{ background: 'linear-gradient(135deg,#0AB5B5,#06B6D4)' }}>
+                {saving
+                  ? <><div className="h-5 w-5 rounded-full border-2 border-white border-t-transparent animate-spin" /><span>שומר...</span></>
+                  : `הוסף ${selectedExercises.length} תרגילים לפיד →`}
+              </button>
+            </div>
           )}
         </div>
       )}
