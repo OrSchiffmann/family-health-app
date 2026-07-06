@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { subDays, startOfMonth } from 'date-fns'
+import { subDays, startOfMonth, startOfWeek, addDays } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
 import TaskCard from '@/components/feed/TaskCard'
 import FilterBar, { type FeedFilters } from '@/components/feed/FilterBar'
@@ -36,6 +36,7 @@ export default function FeedPage() {
   const [familyId, setFamilyId] = useState('')
   const [memberAges, setMemberAges] = useState<{ id: string; months: number | null }[]>([])
   const [reminderSettings, setReminderSettings] = useState<{ enabled: boolean; time: string }>({ enabled: false, time: '18:00' })
+  const [weeklyDismissed, setWeeklyDismissed] = useState(false)
   const preLogProgressRef = useRef<CadenceProgress | null>(null)
 
   const [filters, setFilters] = useState<FeedFilters>({
@@ -273,6 +274,46 @@ export default function FeedPage() {
     return () => clearInterval(interval)
   }, [reminderSettings, reminderSummary.done, reminderSummary.total])
 
+  // Weekly recap — last completed week vs the week before, shown for the first few days of a new week
+  const weekStart = startOfWeek(new Date(), { weekStartsOn: firstDayOfWeek })
+  const weekKey = weekStart.toISOString().slice(0, 10)
+  const withinRecapWindow = new Date() < addDays(weekStart, 3)
+
+  useEffect(() => {
+    setWeeklyDismissed(localStorage.getItem('weekly_recap_dismissed') === weekKey)
+  }, [weekKey])
+
+  function dismissWeekly() {
+    localStorage.setItem('weekly_recap_dismissed', weekKey)
+    setWeeklyDismissed(true)
+  }
+
+  const weeklyRecap = (() => {
+    const lastWeekEnd = subDays(weekStart, 1)
+    const lastWeekStart = startOfWeek(lastWeekEnd, { weekStartsOn: firstDayOfWeek })
+    const prevWeekEnd = subDays(lastWeekStart, 1)
+    const prevWeekStart = startOfWeek(prevWeekEnd, { weekStartsOn: firstDayOfWeek })
+
+    const inRange = (d: Date, start: Date, end: Date) => d >= start && d <= addDays(end, 1)
+    const isDone = (l: LogEntry) => l.completed || (l.durationMinutes ?? 0) > 0 || (l.durationSeconds ?? 0) > 0
+
+    const lastWeekLogs = logs.filter((l) => isDone(l) && inRange(new Date(l.executionTime ?? l.loggedAt), lastWeekStart, lastWeekEnd))
+    const prevWeekLogs = logs.filter((l) => isDone(l) && inRange(new Date(l.executionTime ?? l.loggedAt), prevWeekStart, prevWeekEnd))
+
+    const perMember = members.map((m) => ({
+      member: m,
+      count: lastWeekLogs.filter((l) => l.memberId === m.id).length,
+    })).filter((x) => x.count > 0).sort((a, b) => b.count - a.count)
+
+    return {
+      total: lastWeekLogs.length,
+      delta: lastWeekLogs.length - prevWeekLogs.length,
+      topMember: perMember[0] ?? null,
+      lastWeekStart,
+      lastWeekEnd,
+    }
+  })()
+
   function getStatusScore(task: TaskWithDetails): 0 | 1 | 2 {
     const p = getProgress(task)
     if (p.target === 0) return 0
@@ -354,20 +395,27 @@ export default function FeedPage() {
       {/* Header */}
       <div className="sticky top-0 bg-[#F0FAFA] z-10 px-4 pt-5 pb-3 space-y-3">
         {/* Member chips */}
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
-          <MemberChip
-            member={{ id: 'all', name: 'הכל', avatarColor: '#6366f1' }}
-            selected={selectedMember === null}
-            onClick={() => { setSelectedMember(null); setFilters(f => ({ ...f, categoryIds: [] })) }}
-          />
-          {members.map((m) => (
+        <div className="flex items-center gap-2">
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5 flex-1">
             <MemberChip
-              key={m.id}
-              member={m}
-              selected={selectedMember === m.id}
-              onClick={() => { setSelectedMember(m.id); setFilters(f => ({ ...f, categoryIds: [] })) }}
+              member={{ id: 'all', name: 'הכל', avatarColor: '#6366f1' }}
+              selected={selectedMember === null}
+              onClick={() => { setSelectedMember(null); setFilters(f => ({ ...f, categoryIds: [] })) }}
             />
-          ))}
+            {members.map((m) => (
+              <MemberChip
+                key={m.id}
+                member={m}
+                selected={selectedMember === m.id}
+                onClick={() => { setSelectedMember(m.id); setFilters(f => ({ ...f, categoryIds: [] })) }}
+              />
+            ))}
+          </div>
+          <button onClick={() => router.push('/achievements')}
+            title="אוסף הישגים"
+            className="h-9 w-9 rounded-full bg-white shadow-sm flex items-center justify-center text-lg shrink-0 active:scale-95 transition-transform">
+            🏆
+          </button>
         </div>
 
         <FilterBar filters={filters} categories={categories} selectedMember={selectedMember} onChange={setFilters} />
@@ -404,6 +452,29 @@ export default function FeedPage() {
                   {Math.round((summary.done / summary.total) * 100)}%
                 </span>
               </div>
+            </div>
+          </div>
+        )}
+        {withinRecapWindow && !weeklyDismissed && weeklyRecap.total > 0 && (
+          <div className="rounded-3xl px-5 py-4 text-white" style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}>
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-wide opacity-80">📊 סיכום השבוע שעבר</p>
+                <p className="font-bold text-base mt-0.5">
+                  {weeklyRecap.total} ביצועים
+                  {weeklyRecap.delta !== 0 && (
+                    <span className="text-sm font-semibold opacity-90 mr-1.5">
+                      ({weeklyRecap.delta > 0 ? '↑' : '↓'} {Math.abs(weeklyRecap.delta)} לעומת שבוע קודם)
+                    </span>
+                  )}
+                </p>
+                {weeklyRecap.topMember && (
+                  <p className="text-xs opacity-80 mt-1">
+                    🏅 {weeklyRecap.topMember.member.name} עם הכי הרבה ביצועים ({weeklyRecap.topMember.count})
+                  </p>
+                )}
+              </div>
+              <button onClick={dismissWeekly} className="text-white/70 text-xs shrink-0">✕</button>
             </div>
           </div>
         )}
