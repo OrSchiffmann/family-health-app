@@ -42,6 +42,9 @@ export default function SettingsPage() {
   // Family form
   const [familyName, setFamilyName] = useState('')
   const [firstDay, setFirstDay] = useState<'saturday' | 'sunday' | 'monday'>('sunday')
+  const [reminderEnabled, setReminderEnabled] = useState(false)
+  const [reminderTime, setReminderTime] = useState('18:00')
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission | 'unsupported'>('default')
 
   // New member form
   const [newMemberName, setNewMemberName] = useState('')
@@ -79,6 +82,8 @@ export default function SettingsPage() {
       setFamily(fu.families as any)
       setFamilyName(fu.families?.name ?? '')
       setFirstDay(fu.families?.first_day_of_week ?? 'sunday')
+      setReminderEnabled(fu.families?.reminder_enabled ?? false)
+      setReminderTime((fu.families?.reminder_time ?? '18:00').slice(0, 5))
 
       const [{ data: membersData }, { data: usersData }, { data: tagsData }] = await Promise.all([
         supabase.from('members').select('*').eq('family_id', fid),
@@ -110,12 +115,29 @@ export default function SettingsPage() {
       }
     }
     load()
+
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotifPermission(Notification.permission)
+    } else {
+      setNotifPermission('unsupported')
+    }
   }, [])
 
   async function saveFamily() {
     setSaving(true)
-    await supabase.from('families').update({ name: familyName, first_day_of_week: firstDay }).eq('id', familyId)
+    await supabase.from('families').update({
+      name: familyName,
+      first_day_of_week: firstDay,
+      reminder_enabled: reminderEnabled,
+      reminder_time: reminderTime,
+    }).eq('id', familyId)
     setSaving(false)
+  }
+
+  async function requestNotifPermission() {
+    if (!('Notification' in window)) return
+    const result = await Notification.requestPermission()
+    setNotifPermission(result)
   }
 
   async function addCategory() {
@@ -321,6 +343,51 @@ export default function SettingsPage() {
                 ))}
               </div>
             </div>
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">תזכורת יומית 🔔</p>
+                  <p className="text-xs text-gray-400 mt-0.5">הודעה כשיש משימות שלא הושלמו</p>
+                </div>
+                <button
+                  onClick={() => setReminderEnabled((v) => !v)}
+                  className="relative h-7 w-12 rounded-full transition-colors shrink-0"
+                  style={{ backgroundColor: reminderEnabled ? '#0AB5B5' : '#D1D5DB' }}
+                >
+                  <span className="absolute top-0.5 h-6 w-6 rounded-full bg-white transition-all"
+                    style={{ right: reminderEnabled ? 2 : 22 }} />
+                </button>
+              </div>
+
+              {reminderEnabled && (
+                <>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">שעת תזכורת</label>
+                    <input
+                      type="time"
+                      value={reminderTime}
+                      onChange={(e) => setReminderTime(e.target.value)}
+                      className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-base outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+
+                  {notifPermission === 'unsupported' ? (
+                    <p className="text-xs text-amber-600">הדפדפן הזה לא תומך בהתראות</p>
+                  ) : notifPermission === 'granted' ? (
+                    <p className="text-xs text-teal-600">✓ הרשאת התראות פעילה</p>
+                  ) : (
+                    <button onClick={requestNotifPermission}
+                      className="w-full rounded-xl border border-teal-200 text-teal-700 py-2 text-sm font-medium">
+                      אפשרו התראות בדפדפן
+                    </button>
+                  )}
+                  <p className="text-[11px] text-gray-400 leading-relaxed">
+                    ההתראה תופיע רק כשהאפליקציה פתוחה בדפדפן בזמן שנקבע.
+                  </p>
+                </>
+              )}
+            </div>
+
             <button onClick={saveFamily} disabled={saving}
               className="w-full rounded-xl bg-teal-600 text-white py-3 font-semibold disabled:opacity-60">
               {saving ? 'שומר...' : 'שמור'}

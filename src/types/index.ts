@@ -10,6 +10,8 @@ export interface Family {
   name: string
   createdAt: string
   firstDayOfWeek: FirstDayOfWeek
+  reminderEnabled: boolean
+  reminderTime: string
 }
 
 export interface Member {

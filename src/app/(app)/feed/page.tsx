@@ -35,6 +35,7 @@ export default function FeedPage() {
   const [dailyDismissed, setDailyDismissed] = useState(false)
   const [familyId, setFamilyId] = useState('')
   const [memberAges, setMemberAges] = useState<{ id: string; months: number | null }[]>([])
+  const [reminderSettings, setReminderSettings] = useState<{ enabled: boolean; time: string }>({ enabled: false, time: '18:00' })
   const preLogProgressRef = useRef<CadenceProgress | null>(null)
 
   const [filters, setFilters] = useState<FeedFilters>({
@@ -64,7 +65,7 @@ export default function FeedPage() {
     setFamilyId(familyId)
 
     const [{ data: familyData }, { data: membersData }, { data: tasksData }] = await Promise.all([
-      supabase.from('families').select('first_day_of_week').eq('id', familyId).single(),
+      supabase.from('families').select('first_day_of_week, reminder_enabled, reminder_time').eq('id', familyId).single(),
       supabase.from('members').select('*').eq('family_id', familyId).eq('is_archived', false),
       supabase
         .from('tasks')
@@ -76,6 +77,10 @@ export default function FeedPage() {
     if (familyData?.first_day_of_week) {
       setFirstDayOfWeek(toDateFnsDay(familyData.first_day_of_week as FirstDayOfWeek))
     }
+    setReminderSettings({
+      enabled: familyData?.reminder_enabled ?? false,
+      time: (familyData?.reminder_time ?? '18:00').slice(0, 5),
+    })
 
     setMembers((membersData ?? []).map((m: any) => ({
       id: m.id,
@@ -227,6 +232,46 @@ export default function FeedPage() {
     localStorage.setItem('daily_exercise_dismissed', new Date().toDateString())
     setDailyDismissed(true)
   }
+
+  // Family-wide (unfiltered) pending count, used by the reminder check below
+  const reminderSummary = (() => {
+    const withTarget = tasks
+      .filter((t) => !t.isArchived)
+      .map((t) => computeProgress(t, null, logs.filter((l) => l.taskId === t.id), firstDayOfWeek))
+      .filter((p) => p.target > 0)
+    const done = withTarget.filter((p) => p.achieved >= p.target).length
+    return { done, total: withTarget.length }
+  })()
+
+  // Foreground daily reminder — checks every minute while the app is open
+  useEffect(() => {
+    if (!reminderSettings.enabled) return
+    if (typeof window === 'undefined' || !('Notification' in window)) return
+
+    function checkReminder() {
+      if (Notification.permission !== 'granted') return
+      const now = new Date()
+      const [h, m] = reminderSettings.time.split(':').map(Number)
+      const target = new Date(now)
+      target.setHours(h, m, 0, 0)
+      const diffMinutes = (now.getTime() - target.getTime()) / 60000
+      if (diffMinutes < 0 || diffMinutes > 3) return // fire once, within a 3-minute window after the target time
+
+      const todayKey = now.toDateString()
+      if (localStorage.getItem('reminder_sent_date') === todayKey) return
+      if (reminderSummary.total === 0 || reminderSummary.done >= reminderSummary.total) return
+
+      localStorage.setItem('reminder_sent_date', todayKey)
+      new Notification('תזכורת מהאפליקציה המשפחתית 🔔', {
+        body: `${reminderSummary.total - reminderSummary.done} משימות עדיין מחכות היום`,
+        icon: '/icon-192',
+      })
+    }
+
+    checkReminder()
+    const interval = setInterval(checkReminder, 60000)
+    return () => clearInterval(interval)
+  }, [reminderSettings, reminderSummary.done, reminderSummary.total])
 
   function getStatusScore(task: TaskWithDetails): 0 | 1 | 2 {
     const p = getProgress(task)
