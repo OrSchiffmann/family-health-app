@@ -186,6 +186,7 @@ export default function TaskDetailPage() {
             className={`text-sm font-medium ${task.isArchived ? 'text-teal-600' : 'text-gray-400'}`}>
             {task.isArchived ? 'הוצא מארכיון' : 'ארכיון'}
           </button>
+          <Link href={`/reports/task/${id}`} className="text-gray-400 text-sm font-medium" title="דוח למטפל">📄</Link>
           <Link href={`/tasks/${id}/edit`} className="text-teal-600 text-sm font-medium">ערוך</Link>
         </div>
 

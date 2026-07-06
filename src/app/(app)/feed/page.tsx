@@ -416,6 +416,11 @@ export default function FeedPage() {
             className="h-9 w-9 rounded-full bg-white shadow-sm flex items-center justify-center text-lg shrink-0 active:scale-95 transition-transform">
             🏆
           </button>
+          <button onClick={() => router.push('/kid-mode')}
+            title="מצב ילד"
+            className="h-9 w-9 rounded-full bg-white shadow-sm flex items-center justify-center text-lg shrink-0 active:scale-95 transition-transform">
+            🧒
+          </button>
         </div>
 
         <FilterBar filters={filters} categories={categories} selectedMember={selectedMember} onChange={setFilters} />
