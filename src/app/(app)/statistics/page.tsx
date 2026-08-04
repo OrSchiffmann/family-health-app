@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ComposedChart, Line, Cell } from 'recharts'
+import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ComposedChart, Line, Legend } from 'recharts'
 import {
   format, parseISO, eachDayOfInterval,
   startOfDay, endOfDay, addDays,
@@ -206,9 +206,13 @@ export default function StatisticsPage() {
   }
   const curr = calcCompletion(periodLogs, filteredTasks)
   const prev = calcCompletion(prevPeriodLogs, filteredTasks)
-  const currPct = curr.total > 0 ? Math.round(curr.completed / curr.total * 100) : 0
-  const prevPct = prev.total > 0 ? Math.round(prev.completed / prev.total * 100) : 0
-  const delta = currPct - prevPct
+  const delta = curr.completed - prev.completed
+
+  // Raw execution counts (individual log entries), not task-completion ratios
+  const isDoneLog = (l: LogEntry) =>
+    l.completed || (l.durationMinutes ?? 0) > 0 || (l.durationSeconds ?? 0) > 0
+  const currExecutions = periodLogs.filter(isDoneLog).length
+  const prevExecutions = prevPeriodLogs.filter(isDoneLog).length
 
   const perMember = (selectedMember ? members.filter((m) => m.id === selectedMember) : members).map((m) => {
     const mTasks = filteredTasks.filter((t) => t.assignedMembers.includes(m.id))
@@ -396,36 +400,38 @@ export default function StatisticsPage() {
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-2xl p-3 text-center bg-teal-50 text-teal-700">
                 <p className="text-xl font-bold">{curr.completed}/{curr.total}</p>
-                <p className="text-xs font-medium mt-0.5 opacity-80">הושלמו</p>
+                <p className="text-xs font-medium mt-0.5 opacity-80">משימות שהושלמו</p>
               </div>
-              <div className="rounded-2xl p-3 text-center bg-teal-50 text-teal-700">
-                <p className="text-xl font-bold">{currPct}%</p>
-                <p className="text-xs font-medium mt-0.5 opacity-80">השלמה</p>
+              <div className="rounded-2xl p-3 text-center bg-purple-50 text-purple-700">
+                <p className="text-xl font-bold">{currExecutions}</p>
+                <p className="text-xs font-medium mt-0.5 opacity-80">ביצועים</p>
               </div>
               <div className={`rounded-2xl p-3 text-center ${delta >= 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
                 <p className="text-xl font-bold flex items-center justify-center gap-0.5">
                   {delta > 0 ? '↑' : delta < 0 ? '↓' : '→'}
-                  {Math.abs(delta)}%
+                  {Math.abs(delta)}
                 </p>
-                <p className="text-xs font-medium mt-0.5 opacity-80">לעומת קודם</p>
+                <p className="text-xs font-medium mt-0.5 opacity-80">משימות לעומת קודם</p>
               </div>
             </div>
 
-            {/* Comparison bar: this vs last */}
+            {/* Comparison bars: this vs last — absolute counts, not percentages */}
             {curr.total > 0 && (
               <section>
                 <h2 className="text-sm font-semibold text-gray-500 mb-2">השוואה לתקופה קודמת</h2>
-                <ResponsiveContainer width="100%" height={140}>
+                <ResponsiveContainer width="100%" height={170}>
                   <ComposedChart
-                    data={[{ name: 'קודם', value: prevPct }, { name: 'נוכחי', value: currPct }]}
+                    data={[
+                      { name: 'קודם', משימות: prev.completed, ביצועים: prevExecutions },
+                      { name: 'נוכחי', משימות: curr.completed, ביצועים: currExecutions },
+                    ]}
                     margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                    <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
-                    <Tooltip formatter={(v: any) => `${v}%`} />
-                    <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                      <Cell fill="#CBD5E1" />
-                      <Cell fill="#0AB5B5" />
-                    </Bar>
+                    <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                    <Tooltip />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Bar dataKey="משימות" fill="#0AB5B5" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="ביצועים" fill="#8B5CF6" radius={[6, 6, 0, 0]} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </section>
@@ -437,9 +443,9 @@ export default function StatisticsPage() {
                 <h2 className="text-sm font-semibold text-gray-500 mb-3">לפי חבר משפחה</h2>
                 <div className="space-y-3">
                   {perMember.map(({ member, tasks: t, curr: done, prev: prevDone }) => {
+                    // Bar width stays proportional; the delta badge is an absolute count
                     const pct = t > 0 ? Math.round(done / t * 100) : 0
-                    const prevPctM = t > 0 ? Math.round(prevDone / t * 100) : 0
-                    const d = pct - prevPctM
+                    const d = done - prevDone
                     return (
                       <div key={member.id} className="flex items-center gap-3">
                         <span className="h-8 w-8 rounded-full text-white text-sm font-bold flex items-center justify-center shrink-0 overflow-hidden"
@@ -453,7 +459,7 @@ export default function StatisticsPage() {
                               {done}/{t}
                               {d !== 0 && (
                                 <span className={`text-xs font-medium ${d > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                  {d > 0 ? `+${d}%` : `${d}%`}
+                                  {d > 0 ? `+${d}` : `${d}`}
                                 </span>
                               )}
                             </span>
