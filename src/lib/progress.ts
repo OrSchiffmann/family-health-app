@@ -80,11 +80,15 @@ export function computeProgress(
       const mins = l.durationSeconds != null ? l.durationSeconds / 60 : (l.durationMinutes ?? 0)
       return sum + mins
     }, 0))
-  } else if (cadence.timesPerDay) {
-    // Compound cadence: count days where completions >= timesPerDay
+  } else if (cadence.timesPerDay && cadence.per !== 'day') {
+    // Compound cadence (X/day across Y days): count days meeting the daily quota.
+    // Only meaningful for week/month — for a daily cadence targetCount already IS
+    // the per-day quota, and counting days would cap achieved at 1 vs a target of N.
     const byDay: Record<string, number> = {}
     for (const l of relevantLogs.filter((l) => l.completed)) {
-      const day = new Date(l.executionTime ?? l.loggedAt).toISOString().slice(0, 10)
+      // Local date key — a UTC key would push after-midnight logs into the previous day
+      const d = new Date(l.executionTime ?? l.loggedAt)
+      const day = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
       byDay[day] = (byDay[day] ?? 0) + 1
     }
     achieved = Object.values(byDay).filter((c) => c >= cadence.timesPerDay!).length
@@ -92,5 +96,9 @@ export function computeProgress(
     achieved = relevantLogs.filter((l) => l.completed).length
   }
 
-  return { target, achieved, per: cadence.per, taskType: task.taskType, timesPerDay: cadence.timesPerDay }
+  // Only report timesPerDay when it actually drives the calculation, so the UI
+  // doesn't label a daily task's progress as "days"
+  const effectiveTimesPerDay = cadence.per === 'day' ? null : cadence.timesPerDay
+
+  return { target, achieved, per: cadence.per, taskType: task.taskType, timesPerDay: effectiveTimesPerDay }
 }

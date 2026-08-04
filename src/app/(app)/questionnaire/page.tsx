@@ -279,7 +279,8 @@ export default function QuestionnairePage() {
           target_count: cadence.count,
           target_minutes: null,
           per: cadence.per,
-          times_per_day: (cadence.timesPerDay && cadence.timesPerDay > 1) ? cadence.timesPerDay : null,
+          times_per_day: (cadence.per !== 'day' && cadence.timesPerDay && cadence.timesPerDay > 1)
+            ? cadence.timesPerDay : null,
         })
         if (cadErr) throw new Error(`cadence insert: ${cadErr.message}`)
 
@@ -561,8 +562,9 @@ export default function QuestionnairePage() {
                       </div>
                     </div>
 
-                    {/* timesPerDay: optional compound cadence for all frequencies */}
-                    {(
+                    {/* timesPerDay: compound cadence. Redundant when per='day' —
+                        there the count stepper above already IS the daily quota */}
+                    {cfg.per !== 'day' && (
                       <div>
                         <div className="flex items-center gap-2 mb-1.5">
                           <p className="text-xs text-gray-500">כמה פעמים ביום? (אופציונלי)</p>
