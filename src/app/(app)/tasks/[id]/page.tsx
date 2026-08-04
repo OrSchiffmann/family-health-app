@@ -62,6 +62,7 @@ export default function TaskDetailPage() {
         targetMinutes: v.target_minutes,
         per: v.per,
         timesPerDay: v.times_per_day ?? null,
+        createdAt: v.created_at ?? null,
       })),
       mediaAttachments: t.attachments,
     }

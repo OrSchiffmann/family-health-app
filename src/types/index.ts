@@ -66,6 +66,9 @@ export interface CadenceVersion {
   targetMinutes: number | null
   per: CadencePer
   timesPerDay: number | null
+  /** Tie-breaker when several versions share an effectiveFrom (saving a task
+   *  twice in one day inserts multiple rows dated today). */
+  createdAt?: string | null
 }
 
 export interface Task {

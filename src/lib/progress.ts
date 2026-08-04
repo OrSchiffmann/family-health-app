@@ -11,14 +11,26 @@ export function getWindowBounds(per: CadencePer, firstDayOfWeek: 0 | 1 | 6 = 0):
   }
 }
 
+/** Parse a 'YYYY-MM-DD' effective_from as LOCAL midnight. `new Date('2026-08-04')`
+ *  parses as UTC midnight, which is ahead of local time in UTC+N — so a version
+ *  dated today looks "not yet active" during the early morning hours. */
+function parseEffectiveFrom(value: string): Date {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  return new Date(value)
+}
+
 export function getActiveCadence(versions: CadenceVersion[], date: Date): CadenceVersion | null {
   if (!versions || versions.length === 0) return null
-  const sorted = [...versions].sort(
-    (a, b) => new Date(a.effectiveFrom).getTime() - new Date(b.effectiveFrom).getTime()
-  )
+  const sorted = [...versions].sort((a, b) => {
+    const diff = parseEffectiveFrom(a.effectiveFrom).getTime() - parseEffectiveFrom(b.effectiveFrom).getTime()
+    if (diff !== 0) return diff
+    // Same effective date (task saved more than once today) — newest row wins
+    return new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime()
+  })
   let active: CadenceVersion | null = null
   for (const v of sorted) {
-    if (new Date(v.effectiveFrom) <= date) active = v
+    if (parseEffectiveFrom(v.effectiveFrom) <= date) active = v
   }
   return active
 }

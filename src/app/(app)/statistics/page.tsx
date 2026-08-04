@@ -124,6 +124,7 @@ export default function StatisticsPage() {
             id: v.id, taskId: v.task_id, effectiveFrom: v.effective_from,
             targetCount: v.target_count, targetMinutes: v.target_minutes, per: v.per,
             timesPerDay: v.times_per_day ?? null,
+            createdAt: v.created_at ?? null,
           })),
           mediaAttachments: t.attachments,
         }
