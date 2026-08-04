@@ -6,6 +6,7 @@ import { subDays } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
 import type { TaskWithDetails, Member, LogEntry } from '@/types'
 import { computeProgress, getActiveCadence } from '@/lib/progress'
+import { fetchLogs } from '@/lib/logs'
 import CelebrationOverlay from '@/components/ui/CelebrationOverlay'
 
 type Step = 'member' | 'tasks' | 'done'
@@ -69,18 +70,9 @@ export default function KidModePage() {
     setTasks(enriched)
 
     const ids = enriched.map((t) => t.id)
-    if (ids.length > 0) {
-      const { data: logsData } = await supabase
-        .from('log_entries').select('*').in('task_id', ids)
-        .gte('logged_at', subDays(new Date(), 35).toISOString())
-      setLogs((logsData ?? []).map((l: any) => ({
-        id: l.id, taskId: l.task_id, memberId: l.member_id, loggedBy: l.logged_by,
-        loggedAt: l.logged_at, executionTime: l.execution_time,
-        cadenceVersionId: l.cadence_version_id, completed: l.completed,
-        durationMinutes: l.duration_minutes, durationSeconds: l.duration_seconds,
-        notes: l.notes, tags: [],
-      })))
-    }
+    setLogs(await fetchLogs(supabase, ids, {
+      since: subDays(new Date(), 35).toISOString(),
+    }))
     setLoading(false)
   }, [])
 

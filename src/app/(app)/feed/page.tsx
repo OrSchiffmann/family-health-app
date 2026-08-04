@@ -10,6 +10,7 @@ import MemberChip from '@/components/ui/MemberChip'
 import ExecutionModal from '@/components/tasks/ExecutionModal'
 import type { TaskWithDetails, Member, Category, CadenceProgress, LogEntry, FirstDayOfWeek } from '@/types'
 import { computeProgress, computeDayStreak, getActiveCadence } from '@/lib/progress'
+import { fetchLogs } from '@/lib/logs'
 import Toast from '@/components/ui/Toast'
 import Confetti from '@/components/ui/Confetti'
 
@@ -155,31 +156,10 @@ export default function FeedPage() {
     setTasks(enriched.filter((t) => !t.isArchived || filters.showArchived))
 
     const taskIds = enriched.map((t) => t.id)
-    if (taskIds.length > 0) {
-      // Only load logs from the last 35 days — covers the current period for any cadence
-      const since = startOfMonth(subDays(new Date(), 6)).toISOString()
-      const { data: logsData } = await supabase
-        .from('log_entries')
-        .select('*')
-        .in('task_id', taskIds)
-        .gte('logged_at', since)
-      setLogs((logsData ?? []).map((l: any) => ({
-        id: l.id,
-        taskId: l.task_id,
-        memberId: l.member_id,
-        loggedBy: l.logged_by,
-        loggedAt: l.logged_at,
-        executionTime: l.execution_time,
-        cadenceVersionId: l.cadence_version_id,
-        completed: l.completed,
-        durationMinutes: l.duration_minutes,
-        durationSeconds: l.duration_seconds,
-        notes: l.notes,
-        tags: [],
-      })))
-    } else {
-      setLogs([])
-    }
+    // Covers the current period for any cadence (incl. a week straddling the
+    // month boundary). Paged — a plain select silently caps at 1000 rows.
+    const since = startOfMonth(subDays(new Date(), 6)).toISOString()
+    setLogs(await fetchLogs(supabase, taskIds, { since }))
 
     setLoading(false)
     setRefreshing(false)

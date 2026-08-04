@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Member } from '@/types'
+import { fetchLogRows } from '@/lib/logs'
 
 const MILESTONES = [
   { count: 5, emoji: '🌱', name: 'מתחילים', color: '#84CC16' },
@@ -41,19 +42,18 @@ export default function AchievementsPage() {
       })))
 
       const taskIds = (tasksData ?? []).map((t: any) => t.id)
-      if (taskIds.length > 0) {
-        const { data: logsData } = await supabase
-          .from('log_entries')
-          .select('member_id, completed, duration_minutes, duration_seconds')
-          .in('task_id', taskIds)
+      // Lifetime totals with no date filter — must page, or badges are computed
+      // from an arbitrary 1000-row subset
+      const logsData = await fetchLogRows(supabase, taskIds, {
+        columns: 'id, logged_at, member_id, completed, duration_minutes, duration_seconds',
+      })
 
-        const tally: Record<string, number> = {}
-        for (const l of logsData ?? []) {
-          const counts_ = l.completed || (l.duration_minutes ?? 0) > 0 || (l.duration_seconds ?? 0) > 0
-          if (counts_) tally[l.member_id] = (tally[l.member_id] ?? 0) + 1
-        }
-        setCounts(tally)
+      const tally: Record<string, number> = {}
+      for (const l of logsData) {
+        const counts_ = l.completed || (l.duration_minutes ?? 0) > 0 || (l.duration_seconds ?? 0) > 0
+        if (counts_) tally[l.member_id] = (tally[l.member_id] ?? 0) + 1
       }
+      setCounts(tally)
       setLoading(false)
     })()
   }, [])

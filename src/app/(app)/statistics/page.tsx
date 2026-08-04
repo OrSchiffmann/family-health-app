@@ -13,6 +13,7 @@ import {
 import { he } from 'date-fns/locale'
 import type { Member, Category, TaskWithDetails, LogEntry } from '@/types'
 import { getActiveCadence } from '@/lib/progress'
+import { fetchLogs, mapLogRow } from '@/lib/logs'
 import MemberChip from '@/components/ui/MemberChip'
 
 type Tab = 'summary' | 'consistency' | 'categories' | 'task'
@@ -134,19 +135,10 @@ export default function StatisticsPage() {
       const ids = enriched.map((t) => t.id)
       setTaskIds(ids)
 
-      if (ids.length > 0) {
-        const { data: logsData } = await supabase
-          .from('log_entries').select('*')
-          .in('task_id', ids)
-          .gte('logged_at', subDays(new Date(), 90).toISOString())
-        setAllLogs((logsData ?? []).map((l: any) => ({
-          id: l.id, taskId: l.task_id, memberId: l.member_id, loggedBy: l.logged_by,
-          loggedAt: l.logged_at, executionTime: l.execution_time,
-          cadenceVersionId: l.cadence_version_id, completed: l.completed,
-          durationMinutes: l.duration_minutes, durationSeconds: l.duration_seconds,
-          notes: l.notes, tags: [],
-        })))
-      }
+      // Paged — 90 days of logs comfortably exceeds the silent 1000-row cap
+      setAllLogs(await fetchLogs(supabase, ids, {
+        since: subDays(new Date(), 90).toISOString(),
+      }))
       setLoading(false)
     }
     load()
@@ -163,13 +155,7 @@ export default function StatisticsPage() {
     const { data } = await supabase
       .from('log_entries').select('*').eq('task_id', tid)
       .gte('logged_at', since.toISOString()).order('logged_at')
-    setTaskLogs((data ?? []).map((l: any) => ({
-      id: l.id, taskId: l.task_id, memberId: l.member_id, loggedBy: l.logged_by,
-      loggedAt: l.logged_at, executionTime: l.execution_time,
-      cadenceVersionId: l.cadence_version_id, completed: l.completed,
-      durationMinutes: l.duration_minutes, durationSeconds: l.duration_seconds,
-      notes: l.notes, tags: [],
-    })))
+    setTaskLogs((data ?? []).map(mapLogRow))
   }
 
   function toggleCategory(id: string) {
