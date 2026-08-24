@@ -46,6 +46,7 @@ export default function FeedPage() {
     taskType: 'all',
     progressStatus: 'all',
     showArchived: false,
+    search: '',
   })
 
   const loadData = useCallback(async (isRefresh = false) => {
@@ -303,11 +304,20 @@ export default function FeedPage() {
     return 0                                  // open
   }
 
+  const searchTerm = filters.search.trim().toLowerCase()
+
   const filteredTasks = tasks
     .filter((t) => {
       if (selectedMember && !t.assignedMembers.includes(selectedMember)) return false
       if (filters.categoryIds.length > 0 && !filters.categoryIds.includes(t.categoryId)) return false
       if (filters.taskType !== 'all' && t.taskType !== filters.taskType) return false
+      if (searchTerm) {
+        // Match title, description or category name — the name alone is often
+        // not what you remember about a task
+        const haystack = [t.title, t.description, t.category?.name]
+          .filter(Boolean).join(' ').toLowerCase()
+        if (!haystack.includes(searchTerm)) return false
+      }
       if (filters.progressStatus !== 'all') {
         const score = getStatusScore(t)
         if (filters.progressStatus === 'open' && score !== 0) return false
@@ -415,7 +425,7 @@ export default function FeedPage() {
 
       {/* Task list */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-        {summary.total > 0 && (
+        {!searchTerm && summary.total > 0 && (
           <div className="rounded-3xl px-5 py-4 text-white" style={{ background: 'linear-gradient(135deg, #0AB5B5, #0891B2)' }}>
             <div className="flex items-center justify-between">
               <div>
@@ -441,7 +451,7 @@ export default function FeedPage() {
             </div>
           </div>
         )}
-        {withinRecapWindow && !weeklyDismissed && weeklyRecap.total > 0 && (
+        {!searchTerm && withinRecapWindow && !weeklyDismissed && weeklyRecap.total > 0 && (
           <div className="rounded-3xl px-5 py-4 text-white" style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}>
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
@@ -464,7 +474,7 @@ export default function FeedPage() {
             </div>
           </div>
         )}
-        {dailyExercise && !dailyDismissed && (
+        {!searchTerm && dailyExercise && !dailyDismissed && (
           <div className="bg-white rounded-3xl shadow-sm px-5 py-4 border-2 border-dashed" style={{ borderColor: '#99F6E4' }}>
             <div className="flex items-start gap-3">
               <span className="text-2xl shrink-0">{dailyExercise.emoji}</span>
@@ -494,8 +504,23 @@ export default function FeedPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
             </div>
-            <p className="font-medium text-gray-700">אין משימות</p>
-            <p className="text-sm text-gray-400 mt-1">צרו משימה חדשה כדי להתחיל</p>
+            {searchTerm ? (
+              <>
+                <p className="font-medium text-gray-700">לא נמצאו תוצאות</p>
+                <p className="text-sm text-gray-400 mt-1">אין משימה שמתאימה ל&quot;{filters.search.trim()}&quot;</p>
+                <button
+                  onClick={() => setFilters((f) => ({ ...f, search: '' }))}
+                  className="mt-4 rounded-xl bg-teal-50 text-teal-700 px-4 py-2 text-sm font-semibold"
+                >
+                  נקה חיפוש
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="font-medium text-gray-700">אין משימות</p>
+                <p className="text-sm text-gray-400 mt-1">צרו משימה חדשה כדי להתחיל</p>
+              </>
+            )}
           </div>
         ) : (
           filteredTasks.map((task) => (

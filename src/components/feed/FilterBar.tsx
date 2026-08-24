@@ -13,6 +13,7 @@ export interface FeedFilters {
   taskType: TaskTypeFilter
   progressStatus: ProgressStatus
   showArchived: boolean
+  search: string
 }
 
 interface Props {
@@ -43,6 +44,31 @@ export default function FilterBar({ filters, categories, selectedMember, onChang
 
   return (
     <div className="space-y-2">
+      {/* Search */}
+      <div className="relative">
+        <span className="absolute inset-y-0 right-3 flex items-center text-gray-300 pointer-events-none">
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+          </svg>
+        </span>
+        <input
+          type="text"
+          value={filters.search}
+          onChange={(e) => onChange({ ...filters, search: e.target.value })}
+          placeholder="חיפוש משימה..."
+          className="w-full rounded-full bg-white py-2 pr-9 pl-9 text-sm outline-none focus:ring-2 focus:ring-teal-400 placeholder:text-gray-300"
+        />
+        {filters.search && (
+          <button
+            onClick={() => onChange({ ...filters, search: '' })}
+            aria-label="נקה חיפוש"
+            className="absolute inset-y-0 left-2 flex items-center justify-center text-gray-400 px-1"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
       {/* Time window */}
       <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
         {TIME_WINDOWS.map((tw) => (
