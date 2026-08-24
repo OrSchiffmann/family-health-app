@@ -8,7 +8,7 @@ import {
   startOfDay, endOfDay, addDays,
   startOfWeek, endOfWeek, addWeeks,
   startOfMonth, endOfMonth, addMonths,
-  subDays, isSameDay,
+  subDays, isSameDay, getDay,
 } from 'date-fns'
 import { he } from 'date-fns/locale'
 import type { Member, Category, TaskWithDetails, LogEntry } from '@/types'
@@ -16,7 +16,14 @@ import { getActiveCadence } from '@/lib/progress'
 import { fetchLogs, mapLogRow } from '@/lib/logs'
 import MemberChip from '@/components/ui/MemberChip'
 
-type Tab = 'summary' | 'consistency' | 'categories' | 'task'
+type Tab = 'summary' | 'consistency' | 'categories' | 'weekday' | 'task'
+
+const DOW_LONG = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
+const DOW_SHORT = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש']
+/** How many past occurrences of the chosen weekday to chart */
+const DOW_OCCURRENCES = 8
+/** Matches the 90-day window allLogs is fetched with */
+const HISTORY_DAYS = 90
 type PeriodMode = 'day' | 'week' | 'month'
 type Range = '7d' | '30d' | '3m'
 
@@ -75,6 +82,9 @@ export default function StatisticsPage() {
   const [selectedTask, setSelectedTask] = useState<string>('')
   const [taskLogs, setTaskLogs] = useState<LogEntry[]>([])
   const [range, setRange] = useState<Range>('30d')
+  const [selectedDow, setSelectedDow] = useState<number>(getDay(new Date()))
+  const [compareA, setCompareA] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [compareB, setCompareB] = useState(format(subDays(new Date(), 7), 'yyyy-MM-dd'))
   const [loading, setLoading] = useState(true)
   const [taskIds, setTaskIds] = useState<string[]>([])
 
@@ -221,6 +231,70 @@ export default function StatisticsPage() {
     return { member: m, tasks: mTasks.length, curr: mCurr, prev: mPrev }
   })
 
+  // ── WEEKDAY COMPARISON ─────────────────────────────────────────
+  // Respects the member/category selection, and dates by when the task was
+  // actually performed rather than when it was recorded
+  const weekdayLogs = filterLogs(allLogs).filter(isDoneLog)
+
+  function executionsOn(day: Date) {
+    return weekdayLogs.filter((l) => isSameDay(new Date(l.executionTime ?? l.loggedAt), day)).length
+  }
+
+  const historyDays = eachDayOfInterval({ start: subDays(new Date(), HISTORY_DAYS - 1), end: new Date() })
+
+  /** Average executions per weekday across the whole history window */
+  const weekdayAverages = DOW_LONG.map((label, dow) => {
+    const days = historyDays.filter((d) => getDay(d) === dow)
+    const total = days.reduce((sum, d) => sum + executionsOn(d), 0)
+    return {
+      dow,
+      label,
+      short: DOW_SHORT[dow],
+      total,
+      occurrences: days.length,
+      avg: days.length > 0 ? Number((total / days.length).toFixed(1)) : 0,
+    }
+  })
+
+  /** The last N occurrences of the selected weekday, oldest first */
+  const dowSeries = historyDays
+    .filter((d) => getDay(d) === selectedDow)
+    .slice(-DOW_OCCURRENCES)
+    .map((d) => ({
+      date: d,
+      label: format(d, 'd/M'),
+      ביצועים: executionsOn(d),
+    }))
+
+  const dowStats = (() => {
+    const values = dowSeries.map((p) => p.ביצועים)
+    if (values.length === 0) return { avg: 0, best: 0, latest: 0, vsAvg: 0 }
+    const avg = values.reduce((a, b) => a + b, 0) / values.length
+    const latest = values[values.length - 1]
+    return {
+      avg: Number(avg.toFixed(1)),
+      best: Math.max(...values),
+      latest,
+      vsAvg: Number((latest - avg).toFixed(1)),
+    }
+  })()
+
+  /** Free-form comparison between any two dates */
+  const compareResult = (() => {
+    const parse = (s: string) => (s ? startOfDay(parseISO(s)) : null)
+    const a = parse(compareA)
+    const b = parse(compareB)
+    if (!a || !b) return null
+    const aCount = executionsOn(a)
+    const bCount = executionsOn(b)
+    return {
+      a: { date: a, count: aCount, label: format(a, 'EEEE d/M', { locale: he }) },
+      b: { date: b, count: bCount, label: format(b, 'EEEE d/M', { locale: he }) },
+      delta: aCount - bCount,
+      sameWeekday: getDay(a) === getDay(b),
+    }
+  })()
+
   // ── CONSISTENCY / STREAK ──────────────────────────────────────
   function computeStreak(memberId: string) {
     // Count consecutive periods backward from current offset with ≥1 completion
@@ -288,6 +362,7 @@ export default function StatisticsPage() {
     { value: 'summary', label: 'סיכום' },
     { value: 'consistency', label: 'עקביות' },
     { value: 'categories', label: 'קטגוריות' },
+    { value: 'weekday', label: 'ימים' },
     { value: 'task', label: 'משימה' },
   ]
 
@@ -309,9 +384,12 @@ export default function StatisticsPage() {
             ))}
           </div>
 
-          {/* Period nav — hidden on task tab */}
+          {/* Period nav + member chips — hidden on task tab */}
           {tab !== 'task' && (
             <>
+              {/* Period nav does not apply to the weekday tab, which always
+                  spans the same fixed history window */}
+              {tab !== 'weekday' && (
               <div className="flex items-center justify-between mb-2">
                 <div className="flex gap-1 p-0.5 bg-gray-100 rounded-lg">
                   {(['day', 'week', 'month'] as PeriodMode[]).map((m) => (
@@ -342,6 +420,7 @@ export default function StatisticsPage() {
                   </button>
                 </div>
               </div>
+              )}
 
               {/* Member chips */}
               <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
@@ -610,6 +689,129 @@ export default function StatisticsPage() {
                 </ResponsiveContainer>
               </section>
             )}
+          </>
+        )}
+
+        {/* ── WEEKDAY TAB ── */}
+        {tab === 'weekday' && (
+          <>
+            <p className="text-xs text-gray-400 text-center">
+              מבוסס על {HISTORY_DAYS} הימים האחרונים
+            </p>
+
+            {/* Which weekday is strongest overall */}
+            <section>
+              <h2 className="text-sm font-semibold text-gray-500 mb-2">ממוצע ביצועים לפי יום בשבוע</h2>
+              <ResponsiveContainer width="100%" height={160}>
+                <ComposedChart data={weekdayAverages} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+                  <XAxis dataKey="short" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 10 }} />
+                  <Tooltip
+                    labelFormatter={(v: any) => DOW_LONG[DOW_SHORT.indexOf(String(v))] ?? v}
+                    formatter={(v: any) => [v, 'ממוצע ביצועים']}
+                  />
+                  <Bar dataKey="avg" radius={[6, 6, 0, 0]} fill="#8B5CF6" />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </section>
+
+            {/* Pick a weekday and see it across recent weeks */}
+            <section>
+              <h2 className="text-sm font-semibold text-gray-500 mb-2">השוואת יום מול אותו יום</h2>
+              <div className="flex gap-1 mb-3">
+                {DOW_SHORT.map((s, dow) => (
+                  <button key={dow} onClick={() => setSelectedDow(dow)}
+                    className="flex-1 py-2 rounded-xl text-sm font-bold transition-all"
+                    style={selectedDow === dow
+                      ? { background: 'linear-gradient(135deg,#0AB5B5,#06B6D4)', color: 'white' }
+                      : { backgroundColor: '#F3F4F6', color: '#6B7280' }}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+
+              {dowSeries.length === 0 ? (
+                <p className="text-center text-sm text-gray-400 py-8">אין נתונים לימי {DOW_LONG[selectedDow]}</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-3 mb-3">
+                    <div className="rounded-2xl p-3 text-center bg-teal-50 text-teal-700">
+                      <p className="text-xl font-bold">{dowStats.latest}</p>
+                      <p className="text-xs font-medium mt-0.5 opacity-80">אחרון</p>
+                    </div>
+                    <div className="rounded-2xl p-3 text-center bg-gray-100 text-gray-700">
+                      <p className="text-xl font-bold">{dowStats.avg}</p>
+                      <p className="text-xs font-medium mt-0.5 opacity-80">ממוצע</p>
+                    </div>
+                    <div className={`rounded-2xl p-3 text-center ${dowStats.vsAvg >= 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                      <p className="text-xl font-bold">
+                        {dowStats.vsAvg > 0 ? '↑' : dowStats.vsAvg < 0 ? '↓' : '→'}{Math.abs(dowStats.vsAvg)}
+                      </p>
+                      <p className="text-xs font-medium mt-0.5 opacity-80">מול הממוצע</p>
+                    </div>
+                  </div>
+
+                  <ResponsiveContainer width="100%" height={180}>
+                    <ComposedChart data={dowSeries} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+                      <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                      <Tooltip labelFormatter={(v: any) => `יום ${DOW_LONG[selectedDow]}, ${v}`} />
+                      <Bar dataKey="ביצועים" fill="#0AB5B5" radius={[6, 6, 0, 0]} />
+                      <Line type="monotone" dataKey={() => dowStats.avg} stroke="#F59E0B"
+                        strokeDasharray="4 2" dot={false} name="ממוצע" />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                  <p className="text-[11px] text-gray-400 text-center mt-1">
+                    {DOW_OCCURRENCES} ימי {DOW_LONG[selectedDow]} האחרונים
+                  </p>
+                </>
+              )}
+            </section>
+
+            {/* Free-form: any two dates */}
+            <section>
+              <h2 className="text-sm font-semibold text-gray-500 mb-2">השוואה בין שני תאריכים</h2>
+              <div className="flex gap-2 mb-3">
+                <div className="flex-1">
+                  <label className="text-xs text-gray-400 mb-1 block">תאריך א׳</label>
+                  <input type="date" value={compareA} onChange={(e) => setCompareA(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs text-gray-400 mb-1 block">תאריך ב׳</label>
+                  <input type="date" value={compareB} onChange={(e) => setCompareB(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500" />
+                </div>
+              </div>
+
+              {compareResult && (
+                <>
+                  <ResponsiveContainer width="100%" height={150}>
+                    <ComposedChart
+                      data={[
+                        { name: compareResult.b.label, ביצועים: compareResult.b.count },
+                        { name: compareResult.a.label, ביצועים: compareResult.a.count },
+                      ]}
+                      margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+                      <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                      <Tooltip />
+                      <Bar dataKey="ביצועים" fill="#6366F1" radius={[6, 6, 0, 0]} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                  <p className="text-sm text-center text-gray-600 mt-2">
+                    {compareResult.delta === 0
+                      ? 'אותו מספר ביצועים בשני התאריכים'
+                      : `הפרש של ${Math.abs(compareResult.delta)} ביצועים ${compareResult.delta > 0 ? 'לטובת' : 'לרעת'} ${compareResult.a.label}`}
+                  </p>
+                  {!compareResult.sameWeekday && (
+                    <p className="text-[11px] text-amber-600 text-center mt-1">
+                      שימי לב — אלה ימים שונים בשבוע, ההשוואה עשויה להטעות
+                    </p>
+                  )}
+                </>
+              )}
+            </section>
           </>
         )}
 
