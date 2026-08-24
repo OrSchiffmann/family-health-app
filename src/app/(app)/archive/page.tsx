@@ -14,6 +14,7 @@ export default function ArchivePage() {
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [restoringId, setRestoringId] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -83,15 +84,55 @@ export default function ArchivePage() {
     )
   }
 
+  const searchTerm = search.trim().toLowerCase()
+  const visibleTasks = searchTerm
+    ? tasks.filter((t) =>
+        [t.title, t.description, t.category?.name]
+          .filter(Boolean).join(' ').toLowerCase().includes(searchTerm))
+    : tasks
+
   return (
     <div className="flex flex-col min-h-full" dir="rtl">
-      <div className="sticky top-0 bg-white z-10 px-4 pt-4 pb-3 border-b border-gray-100 flex items-center gap-3">
-        <button onClick={() => router.back()} className="text-gray-400 hover:text-gray-600">
-          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-        <h1 className="text-xl font-bold text-gray-900">ארכיון</h1>
+      <div className="sticky top-0 bg-white z-10 px-4 pt-4 pb-3 border-b border-gray-100 space-y-3">
+        <div className="flex items-center gap-3">
+          <button onClick={() => router.back()} className="text-gray-400 hover:text-gray-600">
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+          <h1 className="text-xl font-bold text-gray-900">ארכיון</h1>
+          {tasks.length > 0 && (
+            <span className="text-xs text-gray-400">
+              {searchTerm ? `${visibleTasks.length} מתוך ${tasks.length}` : `${tasks.length} משימות`}
+            </span>
+          )}
+        </div>
+
+        {tasks.length > 0 && (
+          <div className="relative">
+            <span className="absolute inset-y-0 right-3 flex items-center text-gray-300 pointer-events-none">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+              </svg>
+            </span>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="חיפוש בארכיון..."
+              className="w-full rounded-full bg-gray-50 py-2 pr-9 pl-9 text-sm outline-none focus:ring-2 focus:ring-teal-400 placeholder:text-gray-300"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                aria-label="נקה חיפוש"
+                className="absolute inset-y-0 left-2 flex items-center justify-center text-gray-400 px-1"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-5 space-y-3 pb-10">
@@ -101,8 +142,20 @@ export default function ArchivePage() {
             <p className="font-medium text-gray-700">הארכיון ריק</p>
             <p className="text-sm text-gray-400 mt-1">משימות שהועברו לארכיון יופיעו כאן</p>
           </div>
+        ) : visibleTasks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="text-4xl mb-3">🔍</div>
+            <p className="font-medium text-gray-700">לא נמצאו תוצאות</p>
+            <p className="text-sm text-gray-400 mt-1">אין משימה בארכיון שמתאימה ל&quot;{search.trim()}&quot;</p>
+            <button
+              onClick={() => setSearch('')}
+              className="mt-4 rounded-xl bg-teal-50 text-teal-700 px-4 py-2 text-sm font-semibold"
+            >
+              נקה חיפוש
+            </button>
+          </div>
         ) : (
-          tasks.map((task) => {
+          visibleTasks.map((task) => {
             const taskMembers = members.filter((m) => task.assignedMembers.includes(m.id))
             return (
               <div key={task.id} className="rounded-2xl bg-white border border-gray-100 p-4 space-y-2">
