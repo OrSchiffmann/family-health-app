@@ -1,16 +1,16 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { subDays, startOfMonth, startOfWeek, addDays } from 'date-fns'
-import { createClient } from '@/lib/supabase/client'
+import { createClient, getCurrentUser } from '@/lib/supabase/client'
 import TaskCard from '@/components/feed/TaskCard'
 import FilterBar, { type FeedFilters } from '@/components/feed/FilterBar'
 import MemberChip from '@/components/ui/MemberChip'
 import ExecutionModal from '@/components/tasks/ExecutionModal'
 import type { TaskWithDetails, Member, Category, CadenceProgress, LogEntry, FirstDayOfWeek } from '@/types'
 import { computeProgress, computeDayStreak, getActiveCadence } from '@/lib/progress'
-import { fetchLogs } from '@/lib/logs'
+import { fetchLogs, groupByTask } from '@/lib/logs'
 import Toast from '@/components/ui/Toast'
 import Confetti from '@/components/ui/Confetti'
 
@@ -52,7 +52,7 @@ export default function FeedPage() {
   const loadData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
 
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getCurrentUser(supabase)
     if (!user) return
 
     const { data: fu } = await supabase
@@ -216,15 +216,25 @@ export default function FeedPage() {
     setDailyDismissed(true)
   }
 
+  // Logs indexed by task once, instead of every progress/streak lookup
+  // rescanning the whole log list (which ran several times per task per render)
+  const logsByTask = useMemo(() => groupByTask(logs), [logs])
+
+  /** Progress for every task under the current member selection */
+  const progressByTask = useMemo(() => new Map(tasks.map((t) => [
+    t.id,
+    computeProgress(t, selectedMember, logsByTask.get(t.id) ?? [], firstDayOfWeek),
+  ])), [tasks, selectedMember, logsByTask, firstDayOfWeek])
+
   // Family-wide (unfiltered) pending count, used by the reminder check below
-  const reminderSummary = (() => {
+  const reminderSummary = useMemo(() => {
     const withTarget = tasks
       .filter((t) => !t.isArchived)
-      .map((t) => computeProgress(t, null, logs.filter((l) => l.taskId === t.id), firstDayOfWeek))
+      .map((t) => computeProgress(t, null, logsByTask.get(t.id) ?? [], firstDayOfWeek))
       .filter((p) => p.target > 0)
     const done = withTarget.filter((p) => p.achieved >= p.target).length
     return { done, total: withTarget.length }
-  })()
+  }, [tasks, logsByTask, firstDayOfWeek])
 
   // Foreground daily reminder — checks every minute while the app is open
   useEffect(() => {
@@ -332,8 +342,8 @@ export default function FeedPage() {
     })
 
   function getProgress(task: TaskWithDetails): CadenceProgress {
-    const taskLogs = logs.filter((l) => l.taskId === task.id)
-    return computeProgress(task, selectedMember, taskLogs, firstDayOfWeek)
+    return progressByTask.get(task.id)
+      ?? computeProgress(task, selectedMember, logsByTask.get(task.id) ?? [], firstDayOfWeek)
   }
 
   function getStreak(task: TaskWithDetails): number {
@@ -342,8 +352,7 @@ export default function FeedPage() {
     if (!cadence) return 0
     // Daily requirement: timesPerDay for compound cadences, targetCount for daily tasks, else any completion
     const required = cadence.timesPerDay ?? (cadence.per === 'day' ? (cadence.targetCount ?? 1) : 1)
-    const taskLogs = logs.filter((l) => l.taskId === task.id)
-    return computeDayStreak(taskLogs, selectedMember, required)
+    return computeDayStreak(logsByTask.get(task.id) ?? [], selectedMember, required)
   }
 
   // Daily summary across the visible tasks

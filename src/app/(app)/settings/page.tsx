@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { createClient, getCurrentUser } from '@/lib/supabase/client'
 import type { Member, FamilyUser, Tag, Family } from '@/types'
 
 type SettingsTab = 'family' | 'members' | 'users' | 'tags' | 'account'
@@ -66,7 +66,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
+      const user = await getCurrentUser(supabase)
       if (!user) return
 
       const { data: fu } = await supabase

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
+import { createClient, getCurrentUser } from '@/lib/supabase/client'
 import type { TaskWithDetails, Member } from '@/types'
 import CategoryBadge from '@/components/ui/CategoryBadge'
 
@@ -17,7 +17,7 @@ export default function ArchivePage() {
   const [search, setSearch] = useState('')
 
   const load = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getCurrentUser(supabase)
     if (!user) return
     const { data: fu } = await supabase.from('family_users').select('family_id').eq('user_id', user.id).limit(1).single()
     if (!fu) return

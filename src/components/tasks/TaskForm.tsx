@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { createClient, getCurrentUser } from '@/lib/supabase/client'
 import type { Member, Category, Tag, TaskType, CadencePer, Attachment, AttachmentType } from '@/types'
 
 interface Props {
@@ -134,7 +134,7 @@ export default function TaskForm({ familyId, members, categories, tags, taskId, 
 
   async function handleSave() {
     setSaving(true)
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getCurrentUser(supabase)
     if (!user) return
 
     const taskData = {
