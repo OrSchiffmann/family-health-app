@@ -21,7 +21,11 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // getClaims() verifies the JWT locally (and refreshes an expired session),
+  // instead of getUser()'s round trip to the Auth server on every request —
+  // which, with link prefetching, meant several Auth calls per navigation.
+  const { data } = await supabase.auth.getClaims()
+  const user = data?.claims?.sub ? { id: data.claims.sub } : null
 
   const isAuthRoute = request.nextUrl.pathname.startsWith('/login') ||
                       request.nextUrl.pathname.startsWith('/auth')
@@ -38,5 +42,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.json|icons).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.json|icon|apple-icon).*)'],
 }

@@ -62,3 +62,14 @@ export async function fetchLogs(
 ): Promise<LogEntry[]> {
   return (await fetchLogRows(supabase, taskIds, options)).map(mapLogRow)
 }
+
+/** Index logs by task id in a single pass */
+export function groupByTask<T extends { taskId: string }>(logs: T[]): Map<string, T[]> {
+  const map = new Map<string, T[]>()
+  for (const l of logs) {
+    const list = map.get(l.taskId)
+    if (list) list.push(l)
+    else map.set(l.taskId, [l])
+  }
+  return map
+}

@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { createClient, getCurrentUser } from '@/lib/supabase/client'
 
 export default function PendingApprovalPage() {
   const router = useRouter()
@@ -11,7 +11,7 @@ export default function PendingApprovalPage() {
   // Poll every 10s to check if approved
   useEffect(() => {
     const check = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      const user = await getCurrentUser(supabase)
       if (!user) return
       const { data } = await supabase
         .from('family_users')

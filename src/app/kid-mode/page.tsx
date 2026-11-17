@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { subDays } from 'date-fns'
-import { createClient } from '@/lib/supabase/client'
+import { createClient, getCurrentUser } from '@/lib/supabase/client'
 import type { TaskWithDetails, Member, LogEntry } from '@/types'
 import { computeProgress, getActiveCadence } from '@/lib/progress'
 import { fetchLogs } from '@/lib/logs'
@@ -25,7 +25,7 @@ export default function KidModePage() {
   const [showCelebration, setShowCelebration] = useState(false)
 
   const loadData = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getCurrentUser(supabase)
     if (!user) return
     const { data: fu } = await supabase.from('family_users').select('family_id').eq('user_id', user.id).limit(1).single()
     if (!fu) return

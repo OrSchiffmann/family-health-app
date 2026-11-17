@@ -1,19 +1,19 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useState, useEffect, useMemo } from 'react'
+import { createClient, getCurrentUser } from '@/lib/supabase/client'
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ComposedChart, Line, Legend } from 'recharts'
 import {
   format, parseISO, eachDayOfInterval,
   startOfDay, endOfDay, addDays,
   startOfWeek, endOfWeek, addWeeks,
   startOfMonth, endOfMonth, addMonths,
-  subDays, isSameDay, getDay,
+  subDays, getDay,
 } from 'date-fns'
 import { he } from 'date-fns/locale'
 import type { Member, Category, TaskWithDetails, LogEntry } from '@/types'
 import { getActiveCadence } from '@/lib/progress'
-import { fetchLogs, mapLogRow } from '@/lib/logs'
+import { fetchLogs, mapLogRow, groupByTask } from '@/lib/logs'
 import MemberChip from '@/components/ui/MemberChip'
 
 type Tab = 'summary' | 'consistency' | 'categories' | 'weekday' | 'task'
@@ -58,13 +58,57 @@ function periodLabel(mode: PeriodMode, offset: number, fdow: 0 | 1 | 6 = 0): str
   return format(start, 'MMMM yyyy', { locale: he })
 }
 
-function logsInPeriod(logs: LogEntry[], mode: PeriodMode, offset: number, fdow: 0 | 1 | 6) {
-  const { start, end } = getPeriodBounds(mode, offset, fdow)
-  return logs.filter((l) => {
-    const d = new Date(l.loggedAt)
-    return d >= start && d <= end
-  })
+/** A log with its timestamps parsed once up front. Parsing ISO strings inside
+ *  every filter was the bulk of this page's work — tens of thousands of
+ *  `new Date()` calls per render on a phone. */
+type TimedLog = LogEntry & {
+  /** loggedAt, epoch ms */
+  at: number
+  /** Local calendar day of loggedAt */
+  loggedDay: string
+  /** Local calendar day the task was actually performed */
+  execDay: string
 }
+
+/** Local-calendar day key — equivalent to date-fns isSameDay */
+function dayKey(d: Date) {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+}
+
+function toTimedLog(l: LogEntry): TimedLog {
+  const logged = new Date(l.loggedAt)
+  return {
+    ...l,
+    at: logged.getTime(),
+    loggedDay: dayKey(logged),
+    execDay: l.executionTime ? dayKey(new Date(l.executionTime)) : dayKey(logged),
+  }
+}
+
+const isDoneLog = (l: LogEntry) =>
+  l.completed || (l.durationMinutes ?? 0) > 0 || (l.durationSeconds ?? 0) > 0
+
+function logsInPeriod(logs: TimedLog[], mode: PeriodMode, offset: number, fdow: 0 | 1 | 6) {
+  const { start, end } = getPeriodBounds(mode, offset, fdow)
+  const s = start.getTime()
+  const e = end.getTime()
+  return logs.filter((l) => l.at >= s && l.at <= e)
+}
+
+function groupByDay(logs: LogEntry[]) {
+  const map = new Map<string, LogEntry[]>()
+  for (const l of logs) {
+    const key = dayKey(new Date(l.loggedAt))
+    const list = map.get(key)
+    if (list) list.push(l)
+    else map.set(key, [l])
+  }
+  return map
+}
+
+/** Columns the statistics view reads — notes and other fields are only needed
+ *  on the task tab, which runs its own query */
+const LOG_COLUMNS = 'id, task_id, member_id, logged_at, execution_time, completed, duration_minutes, duration_seconds'
 
 export default function StatisticsPage() {
   const supabase = createClient()
@@ -72,7 +116,7 @@ export default function StatisticsPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [tasks, setTasks] = useState<TaskWithDetails[]>([])
-  const [allLogs, setAllLogs] = useState<LogEntry[]>([])
+  const [allLogs, setAllLogs] = useState<TimedLog[]>([])
   const [selectedMember, setSelectedMember] = useState<string | null>(null)
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([])
   const [periodMode, setPeriodMode] = useState<PeriodMode>('week')
@@ -86,11 +130,10 @@ export default function StatisticsPage() {
   const [compareA, setCompareA] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [compareB, setCompareB] = useState(format(subDays(new Date(), 7), 'yyyy-MM-dd'))
   const [loading, setLoading] = useState(true)
-  const [taskIds, setTaskIds] = useState<string[]>([])
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
+      const user = await getCurrentUser(supabase)
       if (!user) return
       const { data: fu } = await supabase
         .from('family_users').select('family_id').eq('user_id', user.id).limit(1).single()
@@ -143,12 +186,13 @@ export default function StatisticsPage() {
       setCategories(cats)
       setTasks(enriched)
       const ids = enriched.map((t) => t.id)
-      setTaskIds(ids)
 
       // Paged — 90 days of logs comfortably exceeds the silent 1000-row cap
-      setAllLogs(await fetchLogs(supabase, ids, {
-        since: subDays(new Date(), 90).toISOString(),
-      }))
+      const logs = await fetchLogs(supabase, ids, {
+        since: subDays(new Date(), HISTORY_DAYS).toISOString(),
+        columns: LOG_COLUMNS,
+      })
+      setAllLogs(logs.map(toTimedLog))
       setLoading(false)
     }
     load()
@@ -176,76 +220,107 @@ export default function StatisticsPage() {
     setSelectedCategoryIds([])
   }
 
+  // Everything below is derived from the loaded data and the current
+  // selection. It is memoised and indexed so a tap (switching a tab, picking
+  // a weekday, changing a date) doesn't rescan every log many times over.
+
+  const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks])
+
   // Filtered tasks for selected member/categories
-  const filteredTasks = tasks.filter((t) => {
+  const filteredTasks = useMemo(() => tasks.filter((t) => {
     if (selectedMember && !t.assignedMembers.includes(selectedMember)) return false
     if (selectedCategoryIds.length > 0 && !selectedCategoryIds.includes(t.categoryId)) return false
     return true
-  })
+  }), [tasks, selectedMember, selectedCategoryIds])
   const visibleCategories = selectedMember ? categories.filter((c) => c.memberId === selectedMember) : categories
 
+  /** Logs matching the member/category selection (all 90 days) */
+  const scopedLogs = useMemo(() => allLogs.filter((l) => {
+    if (selectedMember && l.memberId !== selectedMember) return false
+    const task = taskById.get(l.taskId)
+    if (!task) return false
+    if (selectedCategoryIds.length > 0 && !selectedCategoryIds.includes(task.categoryId)) return false
+    return true
+  }), [allLogs, taskById, selectedMember, selectedCategoryIds])
+
   // Logs for current and previous period, filtered by member/category
-  function filterLogs(logs: LogEntry[]) {
-    return logs.filter((l) => {
-      if (selectedMember && l.memberId !== selectedMember) return false
-      const task = tasks.find((t) => t.id === l.taskId)
-      if (!task) return false
-      if (selectedCategoryIds.length > 0 && !selectedCategoryIds.includes(task.categoryId)) return false
-      return true
-    })
-  }
-  const periodLogs = filterLogs(logsInPeriod(allLogs, periodMode, periodOffset, firstDayOfWeek))
-  const prevPeriodLogs = filterLogs(logsInPeriod(allLogs, periodMode, periodOffset - 1, firstDayOfWeek))
+  const periodLogs = useMemo(
+    () => logsInPeriod(scopedLogs, periodMode, periodOffset, firstDayOfWeek),
+    [scopedLogs, periodMode, periodOffset, firstDayOfWeek])
+  const prevPeriodLogs = useMemo(
+    () => logsInPeriod(scopedLogs, periodMode, periodOffset - 1, firstDayOfWeek),
+    [scopedLogs, periodMode, periodOffset, firstDayOfWeek])
 
   // ── SUMMARY stats ──────────────────────────────────────────────
-  function taskCounts(logs: LogEntry[], task: TaskWithDetails) {
-    const taskLogs = logs.filter((l) => l.taskId === task.id)
-    const achieved = task.taskType === 'duration'
-      ? taskLogs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0)
-      : taskLogs.filter((l) => l.completed).length
-    if (metric === 'execution') return achieved > 0
-    const cadence = getActiveCadence(task.cadenceVersions, new Date())
-    if (!cadence) return false
-    const target = task.taskType === 'duration' ? (cadence.targetMinutes ?? 0) : (cadence.targetCount ?? 0)
-    return achieved >= target && target > 0
-  }
+  const summaryStats = useMemo(() => {
+    if (tab !== 'summary') return null
+    const now = new Date()
+    const targetOf = new Map(filteredTasks.map((t) => {
+      const cadence = getActiveCadence(t.cadenceVersions, now)
+      const target = !cadence ? null
+        : t.taskType === 'duration' ? (cadence.targetMinutes ?? 0) : (cadence.targetCount ?? 0)
+      return [t.id, target] as const
+    }))
 
-  function calcCompletion(logs: LogEntry[], taskList: TaskWithDetails[]) {
-    const completed = taskList.filter((t) => taskCounts(logs, t)).length
-    return { completed, total: taskList.length }
-  }
-  const curr = calcCompletion(periodLogs, filteredTasks)
-  const prev = calcCompletion(prevPeriodLogs, filteredTasks)
-  const delta = curr.completed - prev.completed
+    function taskCounts(taskLogs: LogEntry[] | undefined, task: TaskWithDetails) {
+      const list = taskLogs ?? []
+      const achieved = task.taskType === 'duration'
+        ? list.reduce((s, l) => s + (l.durationMinutes ?? 0), 0)
+        : list.filter((l) => l.completed).length
+      if (metric === 'execution') return achieved > 0
+      const target = targetOf.get(task.id)
+      if (target == null) return false
+      return achieved >= target && target > 0
+    }
+    const countCompleted = (byTask: Map<string, LogEntry[]>, taskList: TaskWithDetails[]) =>
+      taskList.filter((t) => taskCounts(byTask.get(t.id), t)).length
 
-  // Raw execution counts (individual log entries), not task-completion ratios
-  const isDoneLog = (l: LogEntry) =>
-    l.completed || (l.durationMinutes ?? 0) > 0 || (l.durationSeconds ?? 0) > 0
-  const currExecutions = periodLogs.filter(isDoneLog).length
-  const prevExecutions = prevPeriodLogs.filter(isDoneLog).length
+    const currByTask = groupByTask(periodLogs)
+    const prevByTask = groupByTask(prevPeriodLogs)
+    const curr = { completed: countCompleted(currByTask, filteredTasks), total: filteredTasks.length }
+    const prev = { completed: countCompleted(prevByTask, filteredTasks), total: filteredTasks.length }
 
-  const perMember = (selectedMember ? members.filter((m) => m.id === selectedMember) : members).map((m) => {
-    const mTasks = filteredTasks.filter((t) => t.assignedMembers.includes(m.id))
-    const mCurr = mTasks.filter((t) => taskCounts(periodLogs.filter((l) => l.memberId === m.id), t)).length
-    const mPrev = mTasks.filter((t) => taskCounts(prevPeriodLogs.filter((l) => l.memberId === m.id), t)).length
-    return { member: m, tasks: mTasks.length, curr: mCurr, prev: mPrev }
-  })
+    const perMember = (selectedMember ? members.filter((m) => m.id === selectedMember) : members).map((m) => {
+      const mTasks = filteredTasks.filter((t) => t.assignedMembers.includes(m.id))
+      const mCurr = countCompleted(groupByTask(periodLogs.filter((l) => l.memberId === m.id)), mTasks)
+      const mPrev = countCompleted(groupByTask(prevPeriodLogs.filter((l) => l.memberId === m.id)), mTasks)
+      return { member: m, tasks: mTasks.length, curr: mCurr, prev: mPrev }
+    })
+
+    return {
+      curr,
+      prev,
+      delta: curr.completed - prev.completed,
+      // Raw execution counts (individual log entries), not task-completion ratios
+      currExecutions: periodLogs.filter(isDoneLog).length,
+      prevExecutions: prevPeriodLogs.filter(isDoneLog).length,
+      perMember,
+    }
+  }, [tab, filteredTasks, periodLogs, prevPeriodLogs, metric, members, selectedMember])
 
   // ── WEEKDAY COMPARISON ─────────────────────────────────────────
   // Respects the member/category selection, and dates by when the task was
-  // actually performed rather than when it was recorded
-  const weekdayLogs = filterLogs(allLogs).filter(isDoneLog)
+  // actually performed rather than when it was recorded.
+  /** Executions per local calendar day — one pass instead of one per day */
+  const executionsByDay = useMemo(() => {
+    const map = new Map<string, number>()
+    if (tab !== 'weekday') return map
+    for (const l of scopedLogs) {
+      if (!isDoneLog(l)) continue
+      map.set(l.execDay, (map.get(l.execDay) ?? 0) + 1)
+    }
+    return map
+  }, [tab, scopedLogs])
+  const executionsOn = (day: Date) => executionsByDay.get(dayKey(day)) ?? 0
 
-  function executionsOn(day: Date) {
-    return weekdayLogs.filter((l) => isSameDay(new Date(l.executionTime ?? l.loggedAt), day)).length
-  }
-
-  const historyDays = eachDayOfInterval({ start: subDays(new Date(), HISTORY_DAYS - 1), end: new Date() })
+  const historyDays = useMemo(
+    () => eachDayOfInterval({ start: subDays(new Date(), HISTORY_DAYS - 1), end: new Date() }),
+    [])
 
   /** Average executions per weekday across the whole history window */
-  const weekdayAverages = DOW_LONG.map((label, dow) => {
+  const weekdayAverages = useMemo(() => DOW_LONG.map((label, dow) => {
     const days = historyDays.filter((d) => getDay(d) === dow)
-    const total = days.reduce((sum, d) => sum + executionsOn(d), 0)
+    const total = days.reduce((sum, d) => sum + (executionsByDay.get(dayKey(d)) ?? 0), 0)
     return {
       dow,
       label,
@@ -254,19 +329,19 @@ export default function StatisticsPage() {
       occurrences: days.length,
       avg: days.length > 0 ? Number((total / days.length).toFixed(1)) : 0,
     }
-  })
+  }), [historyDays, executionsByDay])
 
   /** The last N occurrences of the selected weekday, oldest first */
-  const dowSeries = historyDays
+  const dowSeries = useMemo(() => historyDays
     .filter((d) => getDay(d) === selectedDow)
     .slice(-DOW_OCCURRENCES)
     .map((d) => ({
       date: d,
       label: format(d, 'd/M'),
-      ביצועים: executionsOn(d),
-    }))
+      ביצועים: executionsByDay.get(dayKey(d)) ?? 0,
+    })), [historyDays, selectedDow, executionsByDay])
 
-  const dowStats = (() => {
+  const dowStats = useMemo(() => {
     const values = dowSeries.map((p) => p.ביצועים)
     if (values.length === 0) return { avg: 0, best: 0, latest: 0, vsAvg: 0 }
     const avg = values.reduce((a, b) => a + b, 0) / values.length
@@ -277,14 +352,14 @@ export default function StatisticsPage() {
       latest,
       vsAvg: Number((latest - avg).toFixed(1)),
     }
-  })()
+  }, [dowSeries])
 
   /** Free-form comparison between any two dates */
   const compareResult = (() => {
     const parse = (s: string) => (s ? startOfDay(parseISO(s)) : null)
     const a = parse(compareA)
     const b = parse(compareB)
-    if (!a || !b) return null
+    if (!a || !b || isNaN(a.getTime()) || isNaN(b.getTime())) return null
     const aCount = executionsOn(a)
     const bCount = executionsOn(b)
     return {
@@ -296,13 +371,37 @@ export default function StatisticsPage() {
   })()
 
   // ── CONSISTENCY / STREAK ──────────────────────────────────────
+  /** Sorted log timestamps per member, so "any log in this period?" is a
+   *  binary search instead of a full scan per period per member */
+  const memberLogTimes = useMemo(() => {
+    const map = new Map<string, number[]>()
+    if (tab !== 'consistency') return map
+    for (const l of scopedLogs) {
+      const list = map.get(l.memberId)
+      if (list) list.push(l.at)
+      else map.set(l.memberId, [l.at])
+    }
+    for (const list of map.values()) list.sort((a, b) => a - b)
+    return map
+  }, [tab, scopedLogs])
+
   function computeStreak(memberId: string) {
     // Count consecutive periods backward from current offset with ≥1 completion
+    const times = memberLogTimes.get(memberId) ?? []
     let streak = 0
     let o = periodOffset
     for (let i = 0; i < 52; i++) {
-      const logs = filterLogs(logsInPeriod(allLogs.filter((l) => l.memberId === memberId), periodMode, o, firstDayOfWeek))
-      if (logs.length === 0) break
+      const { start, end } = getPeriodBounds(periodMode, o, firstDayOfWeek)
+      // First timestamp >= start
+      let lo = 0
+      let hi = times.length
+      const s = start.getTime()
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1
+        if (times[mid] < s) lo = mid + 1
+        else hi = mid
+      }
+      if (lo >= times.length || times[lo] > end.getTime()) break
       streak++
       o--
     }
@@ -310,37 +409,75 @@ export default function StatisticsPage() {
   }
 
   // 28-day heatmap (always daily)
-  const heatmapDays = eachDayOfInterval({ start: subDays(new Date(), 27), end: new Date() })
-  function heatmapCount(memberId: string | null, day: Date) {
-    return allLogs.filter((l) => {
-      if (memberId && l.memberId !== memberId) return false
-      return isSameDay(new Date(l.loggedAt), day) && (l.completed || (l.durationMinutes ?? 0) > 0)
-    }).length
-  }
+  const heatmapDays = useMemo(() => eachDayOfInterval({ start: subDays(new Date(), 27), end: new Date() }), [])
+  const heatmapCounts = useMemo(() => {
+    const map = new Map<string, number>()
+    if (tab !== 'consistency') return map
+    for (const l of allLogs) {
+      if (selectedMember && l.memberId !== selectedMember) continue
+      if (!(l.completed || (l.durationMinutes ?? 0) > 0)) continue
+      map.set(l.loggedDay, (map.get(l.loggedDay) ?? 0) + 1)
+    }
+    return map
+  }, [tab, allLogs, selectedMember])
+  const heatmapCount = (day: Date) => heatmapCounts.get(dayKey(day)) ?? 0
 
   // ── CATEGORY DISTRIBUTION ──────────────────────────────────────
-  const categoryStats = categories
-    .filter((c) => !selectedMember || c.memberId === selectedMember)
-    .map((cat) => {
-      const catTasks = filteredTasks.filter((t) => t.categoryId === cat.id)
-      const catLogs = periodLogs.filter((l) => catTasks.some((t) => t.id === l.taskId))
-      const completions = catLogs.filter((l) => l.completed).length
-      const minutes = catLogs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0)
-      return { cat, completions, minutes, total: completions + minutes }
+  /** taskId → categoryId, for tasks in the current selection */
+  const filteredTaskCategory = useMemo(
+    () => new Map(filteredTasks.map((t) => [t.id, t.categoryId])),
+    [filteredTasks])
+
+  const categoryStats = useMemo(() => {
+    if (tab !== 'categories') return []
+    const totals = new Map<string, { completions: number; minutes: number }>()
+    for (const l of periodLogs) {
+      const catId = filteredTaskCategory.get(l.taskId)
+      if (catId === undefined) continue
+      const t = totals.get(catId) ?? { completions: 0, minutes: 0 }
+      if (l.completed) t.completions++
+      t.minutes += l.durationMinutes ?? 0
+      totals.set(catId, t)
+    }
+    return categories
+      .filter((c) => !selectedMember || c.memberId === selectedMember)
+      .map((cat) => {
+        const { completions, minutes } = totals.get(cat.id) ?? { completions: 0, minutes: 0 }
+        return { cat, completions, minutes, total: completions + minutes }
+      })
+      .filter((c) => c.total > 0)
+      .sort((a, b) => b.total - a.total)
+  }, [tab, periodLogs, filteredTaskCategory, categories, selectedMember])
+
+  /** Stacked trend for the top categories over the last 4 periods */
+  const categoryTrend = useMemo(() => {
+    if (tab !== 'categories' || categoryStats.length === 0) return []
+    const top = categoryStats.slice(0, 4)
+    return [-3, -2, -1, 0].map((o) => {
+      const logs = logsInPeriod(scopedLogs, periodMode, periodOffset + o, firstDayOfWeek)
+      const point: any = { label: periodLabel(periodMode, periodOffset + o, firstDayOfWeek).slice(0, 6) }
+      const counts = new Map<string, number>()
+      for (const l of logs) {
+        if (!(l.completed || (l.durationMinutes ?? 0) > 0)) continue
+        const catId = filteredTaskCategory.get(l.taskId)
+        if (catId !== undefined) counts.set(catId, (counts.get(catId) ?? 0) + 1)
+      }
+      top.forEach(({ cat }) => { point[cat.name] = counts.get(cat.id) ?? 0 })
+      return point
     })
-    .filter((c) => c.total > 0)
-    .sort((a, b) => b.total - a.total)
+  }, [tab, categoryStats, scopedLogs, periodMode, periodOffset, firstDayOfWeek, filteredTaskCategory])
 
   // ── TASK tab ──────────────────────────────────────────────────
-  const selectedTaskData = tasks.find((t) => t.id === selectedTask)
-  function buildTaskChartData() {
-    if (!selectedTaskData || taskLogs.length === 0) return []
+  const selectedTaskData = taskById.get(selectedTask)
+  const taskChartData = useMemo(() => {
+    if (tab !== 'task' || !selectedTaskData || taskLogs.length === 0) return []
+    const byDay = groupByDay(taskLogs)
     const days = eachDayOfInterval({
       start: subDays(new Date(), range === '7d' ? 6 : range === '30d' ? 29 : 89),
       end: new Date(),
     })
     return days.map((d) => {
-      const dayLogs = taskLogs.filter((l) => isSameDay(parseISO(l.loggedAt), d))
+      const dayLogs = byDay.get(dayKey(d)) ?? []
       const value = selectedTaskData.taskType === 'duration'
         ? dayLogs.reduce((s, l) => s + (l.durationMinutes ?? 0), 0)
         : dayLogs.filter((l) => l.completed).length
@@ -348,7 +485,7 @@ export default function StatisticsPage() {
       const target = selectedTaskData.taskType === 'duration' ? (cadence?.targetMinutes ?? 0) : (cadence?.targetCount ?? 0)
       return { date: format(d, 'd/M'), value, target }
     })
-  }
+  }, [tab, selectedTaskData, taskLogs, range])
 
   if (loading) {
     return (
@@ -454,7 +591,9 @@ export default function StatisticsPage() {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5 pb-24">
 
         {/* ── SUMMARY TAB ── */}
-        {tab === 'summary' && (
+        {tab === 'summary' && summaryStats && (() => {
+          const { curr, prev, delta, currExecutions, prevExecutions, perMember } = summaryStats
+          return (
           <>
             {/* Metric toggle */}
             <div className="flex gap-1 p-0.5 bg-gray-100 rounded-xl">
@@ -559,7 +698,8 @@ export default function StatisticsPage() {
               <p className="text-center text-sm text-gray-400 py-8">אין משימות לתצוגה</p>
             )}
           </>
-        )}
+          )
+        })()}
 
         {/* ── CONSISTENCY TAB ── */}
         {tab === 'consistency' && (
@@ -602,7 +742,7 @@ export default function StatisticsPage() {
                   <div key={d} className="text-center text-xs text-gray-400 pb-1">{d}</div>
                 ))}
                 {heatmapDays.map((day) => {
-                  const count = heatmapCount(selectedMember, day)
+                  const count = heatmapCount(day)
                   const opacity = count === 0 ? 0 : count === 1 ? 0.3 : count === 2 ? 0.6 : 1
                   return (
                     <div key={day.toISOString()}
@@ -637,7 +777,7 @@ export default function StatisticsPage() {
                 <h2 className="text-sm font-semibold text-gray-500 mb-3">פעילות לפי קטגוריה</h2>
                 <div className="space-y-3">
                   {categoryStats.map(({ cat, completions, minutes }) => {
-                    const maxVal = Math.max(...categoryStats.map((c) => c.completions + c.minutes))
+                    const maxVal = categoryStats[0].total
                     const width = maxVal > 0 ? ((completions + minutes) / maxVal) * 100 : 0
                     return (
                       <div key={cat.id} className="space-y-1">
@@ -669,15 +809,7 @@ export default function StatisticsPage() {
                 <h2 className="text-sm font-semibold text-gray-500 mb-3">טרנד — 4 תקופות אחרונות</h2>
                 <ResponsiveContainer width="100%" height={180}>
                   <ComposedChart
-                    data={[-3, -2, -1, 0].map((o) => {
-                      const logs = filterLogs(logsInPeriod(allLogs, periodMode, periodOffset + o, firstDayOfWeek))
-                      const point: any = { label: periodLabel(periodMode, periodOffset + o, firstDayOfWeek).slice(0, 6) }
-                      categoryStats.slice(0, 4).forEach(({ cat }) => {
-                        const catTasks = filteredTasks.filter((t) => t.categoryId === cat.id)
-                        point[cat.name] = logs.filter((l) => catTasks.some((t) => t.id === l.taskId) && (l.completed || (l.durationMinutes ?? 0) > 0)).length
-                      })
-                      return point
-                    })}
+                    data={categoryTrend}
                     margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
                     <XAxis dataKey="label" tick={{ fontSize: 9 }} />
                     <YAxis tick={{ fontSize: 10 }} />
@@ -867,7 +999,7 @@ export default function StatisticsPage() {
                 </div>
 
                 <ResponsiveContainer width="100%" height={200}>
-                  <ComposedChart data={buildTaskChartData()} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+                  <ComposedChart data={taskChartData} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
                     <XAxis dataKey="date" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
                     <YAxis tick={{ fontSize: 10 }} />
                     <Tooltip />

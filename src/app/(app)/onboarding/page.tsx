@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { createClient, getCurrentUser } from '@/lib/supabase/client'
 
 export default function OnboardingPage() {
   const router = useRouter()
@@ -17,7 +17,7 @@ export default function OnboardingPage() {
     setLoading(true)
     setError('')
 
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getCurrentUser(supabase)
     if (!user) { router.push('/login'); return }
 
     const { error: createErr } = await supabase.rpc('create_family', {
