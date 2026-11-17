@@ -20,19 +20,33 @@ export async function fetchLogRows(
   if (taskIds.length === 0) return []
 
   const rows: any[] = []
+  // Keyset paging: each page continues after the last row of the previous one,
+  // instead of OFFSET — which makes the database re-read and discard every
+  // earlier row, so each page got slower than the last. Needs id and
+  // logged_at in the selected columns; falls back to OFFSET otherwise.
+  const canKeyset = columns === '*' || (/\bid\b/.test(columns) && /\blogged_at\b/.test(columns))
+  let last: { logged_at: string; id: string } | null = null
   for (let from = 0; ; from += PAGE_SIZE) {
     let query = supabase.from('log_entries').select(columns).in('task_id', taskIds)
     if (since) query = query.gte('logged_at', since)
+    if (canKeyset && last) {
+      query = query.or(
+        `logged_at.lt."${last.logged_at}",and(logged_at.eq."${last.logged_at}",id.lt.${last.id})`,
+      )
+    }
 
-    const { data, error } = await query
-      // Deterministic order so paging can't skip or repeat rows
+    // Deterministic order so paging can't skip or repeat rows
+    query = query
       .order('logged_at', { ascending: false })
       .order('id', { ascending: false })
-      .range(from, from + PAGE_SIZE - 1)
+    const { data, error } = await (canKeyset
+      ? query.limit(PAGE_SIZE)
+      : query.range(from, from + PAGE_SIZE - 1))
 
     if (error || !data) break
     rows.push(...data)
     if (data.length < PAGE_SIZE) break
+    last = data[data.length - 1]
   }
   return rows
 }
